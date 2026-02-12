@@ -209,15 +209,12 @@ jobs:
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
           # Test that openclaw binary exists and is executable
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest which openclaw
+          # Use entrypoint override to skip validation and just check the binary
+          docker run --rm --entrypoint /bin/bash ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest -c "which openclaw"
           
           # Test that the container starts and passes validation checks
           # Use a dummy Anthropic API key format (sk-ant-...)
-          docker run -d --name test-openclaw \
-            -e OPENCLAW_GATEWAY_TOKEN=test-token \
-            -e ANTHROPIC_API_KEY=sk-ant-dummy-test-key-for-validation-only \
-            -p 8080:8080 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run -d --name test-openclaw -e OPENCLAW_GATEWAY_TOKEN=test-token -e ANTHROPIC_API_KEY=sk-ant-dummy-test-key-for-validation-only -p 8080:8080 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
           # Wait for startup and check if container is still running
           sleep 30
