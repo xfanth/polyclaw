@@ -339,8 +339,8 @@ Common issues:
 If you see permission errors:
 
 ```bash
-# Fix ownership (OpenClaw runs as UID/GID 1001)
-sudo chown -R 1001:1001 ./data
+# Fix ownership (OpenClaw runs as UID/GID 10000)
+sudo chown -R 10000:10000 ./data
 
 # Or run as root (not recommended for production)
 docker compose exec --user root openclaw bash

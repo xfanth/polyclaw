@@ -131,9 +131,9 @@ RUN ARCH=$(dpkg --print-architecture) \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for running OpenClaw
-# Use UID/GID 1001 to avoid conflicts with existing users in base image
-RUN groupadd -r openclaw -g 1001 \
-    && useradd -r -g openclaw -u 1001 -m -s /bin/bash openclaw \
+# Use high UID/GID to avoid conflicts with existing users in base image
+RUN groupadd -r openclaw -g 10000 \
+    && useradd -r -g openclaw -u 10000 -m -s /bin/bash openclaw \
     && usermod -aG sudo openclaw \
     && echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw
 
