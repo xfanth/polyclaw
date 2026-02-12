@@ -116,4 +116,20 @@ jobs:
           echo "- **Type:** ${{ inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Version:** ${{ steps.bump.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The Docker build workflow has been triggered automatically." >> $GITHUB_STEP_SUMMARY
+          echo "Starting Docker build..." >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Build Docker Image
+  # ===========================================================================
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: create-release
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      version: ${{ needs.create-release.outputs.new_version }}
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
