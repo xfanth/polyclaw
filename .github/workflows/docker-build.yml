@@ -49,6 +49,11 @@ permissions:
   attestations: write
   id-token: write
 
+# Cancel pending or in-progress runs when a newer commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ===========================================================================
   # Build and Push Docker Image
