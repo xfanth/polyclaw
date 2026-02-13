@@ -236,8 +236,9 @@ services:
           memory: 512M
     
     # Security options
-    security_opt:
-      - no-new-privileges:true
+    # Note: no-new-privileges disabled to allow sudo for nginx configuration
+    # security_opt:
+    #   - no-new-privileges:true
     
     # Capabilities
     cap_drop:
