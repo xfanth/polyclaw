@@ -150,7 +150,7 @@ jobs:
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
-          with:
+        with:
             name: smoke-test-logs
             path: |
               /tmp/build.log
