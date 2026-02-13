@@ -179,12 +179,22 @@ jobs:
           name: docker-image
       
       # -----------------------------------------------------------------------
-      # Load Docker image
-      # -----------------------------------------------------------------------
+       # Load Docker image
+       # -----------------------------------------------------------------------
       - name: Load Docker image
         run: |
           docker load < openclaw-image.tar.gz
           docker tag openclaw:test openclaw:smoke-test
+          
+      # Verify image is loaded
+      - name: Verify Docker image loaded
+        run: |
+          if docker image inspect openclaw:smoke-test > /dev/null; then
+            echo "Image openclaw:smoke-test is loaded successfully"
+          else
+            echo "FAILED: Image openclaw:smoke-test not found after load"
+            exit 1
+          fi
       
       # -----------------------------------------------------------------------
       # Set up Docker Buildx
