@@ -161,8 +161,12 @@ RUN ln -s /opt/openclaw/app/docs /opt/openclaw/docs \
     && ln -s /opt/openclaw/app/package.json /opt/openclaw/package.json
 
 # Create openclaw CLI wrapper
-RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /opt/openclaw/app/openclaw.mjs "$@"' > /usr/local/bin/openclaw \
-    && chmod +x /usr/local/bin/openclaw
+RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /opt/openclaw/app/openclaw.mjs "$@"' > /usr/local/bin/openclaw.real \
+    && chmod +x /usr/local/bin/openclaw.real
+
+# Copy and install the user switching wrapper
+COPY --chown=openclaw:openclaw scripts/openclaw-wrapper.sh /usr/local/bin/openclaw
+RUN chmod +x /usr/local/bin/openclaw
 
 # Set up directories with proper permissions
 RUN mkdir -p /data/.openclaw /data/workspace /app/config /var/log/openclaw \
@@ -191,7 +195,10 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 COPY --chown=openclaw:openclaw scripts/ /app/scripts/
 COPY --chown=openclaw:openclaw nginx.conf /etc/nginx/sites-available/openclaw
 RUN chmod +x /app/scripts/*.sh \
-    && ln -s /etc/nginx/sites-available/openclaw /etc/nginx/sites-enabled/openclaw
+    && chmod +x /usr/local/bin/openclaw \
+    && ln -s /etc/nginx/sites-available/openclaw /etc/nginx/sites-enabled/openclaw \
+    && cp /usr/local/bin/openclaw /usr/local/bin/run-as-openclaw \
+    && chmod +x /usr/local/bin/run-as-openclaw
 
 # Create health check script
 RUN printf '%s\n' '#!/bin/bash' 'curl -f http://localhost:${PORT:-8080}/healthz || exit 1' > /app/scripts/healthcheck.sh \

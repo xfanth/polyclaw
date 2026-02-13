@@ -314,7 +314,7 @@ nginx -t || {
 # Fix legacy config keys
 # =============================================================================
 log_info "Running openclaw doctor to fix legacy config..."
-openclaw doctor --fix || true
+/usr/local/bin/openclaw.real doctor --fix || true
 
 # =============================================================================
 # Create supervisord configuration
@@ -339,7 +339,7 @@ stdout_logfile=/var/log/supervisor/nginx.log
 stderr_logfile=/var/log/supervisor/nginx-error.log
 
 [program:openclaw]
-command=openclaw gateway --port ${GATEWAY_PORT} --bind loopback
+command=/usr/local/bin/openclaw.real gateway --port ${GATEWAY_PORT} --bind loopback
 autostart=true
 autorestart=true
 priority=20
