@@ -52,13 +52,19 @@ jobs:
       - name: Get latest OpenClaw tagged version and main commit
         id: check
         run: |
-          # Get the latest release tag from OpenClaw repo
-          LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name // "none"')
+          # Get latest release tag from OpenClaw repo
+          LATEST_TAG=$(
+            curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest \
+              | jq -r '.tag_name // "none"'
+          )
           echo "tagged_version=$LATEST_TAG" >> $GITHUB_OUTPUT
 
-          # Get the commit hash for the latest tag
+          # Get commit hash for latest tag
           if [ "$LATEST_TAG" != "none" ]; then
-            TAGGED_COMMIT=$(curl -s https://api.github.com/repos/openclaw/openclaw/git/refs/tags/$LATEST_TAG | jq -r '.object.sha // "none"')
+            TAGGED_COMMIT=$(
+              curl -s https://api.github.com/repos/openclaw/openclaw/git/refs/tags/$LATEST_TAG \
+                | jq -r '.object.sha // "none"'
+            )
             echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
           else
             TAGGED_COMMIT="none"
@@ -143,11 +149,13 @@ jobs:
             This PR updates OpenClaw to tagged version `${{ needs.check-update.outputs.tagged_version }}`.
 
             - **New Version:** `${{ needs.check-update.outputs.tagged_version }}`
-            - **New Commit:** `${{ needs.check_update.outputs.tagged_commit }}`
+            - **New Commit:** `${{ needs.check-update.outputs.tagged_commit }}`
             - **Previous Commit:** `${{ needs.check-update.outputs.tagged_current_commit }}`
 
             ### Changes
-            See [OpenClaw Release Notes](https://github.com/openclaw/openclaw/releases/tag/${{ needs.check-update.outputs.tagged_version }})
+            See [OpenClaw Release Notes](
+              https://github.com/openclaw/openclaw/releases/tag/${{ needs.check-update.outputs.tagged_version }}
+            )
 
             ### Docker Images
             Once this PR is merged and the build completes, the following image will be available:
