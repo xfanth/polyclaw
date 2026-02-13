@@ -233,7 +233,7 @@ jobs:
   push:
     name: Push to GHCR
     runs-on: ubuntu-latest
-    needs: [pre-commit, build]
+    needs: [pre-commit, build, smoke-test, security-scan]
     if: github.event_name == 'push'
 
     steps:
