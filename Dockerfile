@@ -62,7 +62,7 @@ LABEL org.opencontainers.image.source="https://github.com/openclaw/openclaw"
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_ENV=production
 
-# Install runtime dependencies including nginx for reverse proxy and systemd
+# Install runtime dependencies including nginx for reverse proxy
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         # Core utilities
@@ -74,8 +74,7 @@ RUN apt-get update \
         openssl \
         # Process management
         procps \
-        systemd \
-        systemd-sysv \
+        supervisor \
         # Text editors and tools
         neovim \
         vim-tiny \
@@ -105,11 +104,8 @@ RUN apt-get update \
         rsync \
         cron \
         logrotate \
-        # DBus for systemd
-        dbus \
     && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean \
-    && systemctl mask getty.target
+    && apt-get clean
 
 # Install Homebrew (Linuxbrew) for additional package management
 RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
@@ -184,16 +180,15 @@ RUN rm -f /etc/nginx/sites-enabled/default \
     && chown -R openclaw:openclaw /var/log/nginx \
     && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
     && chown -R openclaw:openclaw /tmp/nginx \
-    && sed -i 's|pid /run/nginx.pid|pid /tmp/nginx.pid|' /etc/nginx/nginx.conf
+    && sed -i 's|pid /run/nginx.pid|pid /tmp/nginx.pid|' /etc/nginx/nginx.conf \
+    && mkdir -p /var/log/supervisor \
+    && chown -R openclaw:openclaw /var/log/supervisor
 
 # Copy scripts and configuration
 COPY --chown=openclaw:openclaw scripts/ /app/scripts/
 COPY --chown=openclaw:openclaw nginx.conf /etc/nginx/sites-available/openclaw
-COPY --chown=openclaw:openclaw scripts/openclaw-container.service /etc/systemd/system/openclaw.service
 RUN chmod +x /app/scripts/*.sh \
-    && ln -s /etc/nginx/sites-available/openclaw /etc/nginx/sites-enabled/openclaw \
-    && systemctl enable nginx \
-    && systemctl enable openclaw
+    && ln -s /etc/nginx/sites-available/openclaw /etc/nginx/sites-enabled/openclaw
 
 # Create health check script
 RUN printf '%s\n' '#!/bin/bash' 'curl -f http://localhost:${PORT:-8080}/healthz || exit 1' > /app/scripts/healthcheck.sh \
@@ -216,11 +211,11 @@ EXPOSE 8080 18789
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD /app/scripts/healthcheck.sh
 
-# Note: Running as root for systemd
-# The openclaw service runs as openclaw user via systemd
+# Switch to non-root user
+USER openclaw
 
 # Set working directory
 WORKDIR /data
 
-# Use systemd as init (PID 1)
-ENTRYPOINT ["/lib/systemd/systemd"]
+# Entrypoint
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
