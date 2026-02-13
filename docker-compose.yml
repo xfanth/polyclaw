@@ -176,39 +176,6 @@ services:
       # ---------------------------------------------------------------------
       - NODE_ENV=production
     
-    # Volumes for persistence
-    volumes:
-      # Main data directory - persists config, sessions, skills, plugins
-      - type: bind
-        source: ${OPENCLAW_DATA_DIR:-./data/.openclaw}
-        target: /data/.openclaw
-      
-      # Workspace directory - for agent projects
-      - type: bind
-        source: ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}
-        target: /data/workspace
-      
-      # Custom configuration file (optional)
-      - type: bind
-        source: ${OPENCLAW_CUSTOM_CONFIG:-./config/openclaw.json}
-        target: /app/config/openclaw.json
-        read_only: true
-      
-      # Logs directory
-      - type: bind
-        source: ${OPENCLAW_LOGS_DIR:-./logs}
-        target: /var/log/openclaw
-      
-      # NPM cache persistence (for skills/plugins)
-      - type: volume
-        source: openclaw-npm-cache
-        target: /data/.openclaw/npm
-      
-      # Homebrew persistence
-      - type: volume
-        source: openclaw-brew-cache
-        target: /data/.openclaw/brew
-    
     # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
@@ -230,22 +197,54 @@ services:
           cpus: '0.5'
           memory: 512M
     
-    # Security options
-    # Note: no-new-privileges disabled to allow sudo for nginx configuration
-    # security_opt:
-    #   - no-new-privileges:true
+    # Security options for systemd
+    privileged: true
     
-    # Capabilities
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
-      - AUDIT_WRITE
-      - DAC_READ_SEARCH
-      - NET_BIND_SERVICE
-      - KILL
+    # Required for systemd
+    volumes:
+      # Main data directory - persists config, sessions, skills, plugins
+      - type: bind
+        source: ${OPENCLAW_DATA_DIR:-./data/.openclaw}
+        target: /data/.openclaw
+      # Workspace directory - for agent projects
+      - type: bind
+        source: ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}
+        target: /data/workspace
+      # Custom configuration file (optional)
+      - type: bind
+        source: ${OPENCLAW_CUSTOM_CONFIG:-./config/openclaw.json}
+        target: /app/config/openclaw.json
+        read_only: true
+      # Logs directory
+      - type: bind
+        source: ${OPENCLAW_LOGS_DIR:-./logs}
+        target: /var/log/openclaw
+      # NPM cache persistence (for skills/plugins)
+      - type: volume
+        source: openclaw-npm-cache
+        target: /data/.openclaw/npm
+      # Homebrew persistence
+      - type: volume
+        source: openclaw-brew-cache
+        target: /data/.openclaw/brew
+      # Systemd required tmpfs mounts
+      - type: tmpfs
+        target: /run
+        tmpfs:
+          size: 100M
+      - type: tmpfs
+        target: /run/lock
+        tmpfs:
+          size: 100M
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 500M
+      # Cgroup mount for systemd
+      - type: bind
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+        read_only: false
     
     # Networks
     networks:

@@ -1,0 +1,24 @@
+[Unit]
+Description=OpenClaw AI Gateway
+After=network.target nginx.service
+Requires=nginx.service
+
+[Service]
+Type=simple
+User=openclaw
+Group=openclaw
+WorkingDirectory=/data
+Environment=HOME=/data/.openclaw
+Environment=OPENCLAW_STATE_DIR=/data/.openclaw
+Environment=OPENCLAW_WORKSPACE_DIR=/data/workspace
+Environment=OPENCLAW_CONFIG_PATH=/data/.openclaw/openclaw.json
+Environment=OPENCLAW_GATEWAY_PORT=18789
+Environment=OPENCLAW_GATEWAY_BIND=loopback
+ExecStart=/usr/local/bin/openclaw gateway --port 18789 --bind loopback
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

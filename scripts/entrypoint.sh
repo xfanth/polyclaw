@@ -293,43 +293,10 @@ nginx -t || {
 }
 
 # =============================================================================
-# Create supervisord configuration
+# Start services via systemd
 # =============================================================================
-log_info "Creating supervisord configuration..."
-
-mkdir -p /var/log/supervisor
-
-cat > /app/supervisord.conf << EOF
-[supervisord]
-nodaemon=true
-user=openclaw
-logfile=/var/log/supervisor/supervisord.log
-pidfile=/tmp/supervisord.pid
-
-[program:nginx]
-command=nginx -g "daemon off;"
-autostart=true
-autorestart=true
-priority=10
-stdout_logfile=/var/log/supervisor/nginx.log
-stderr_logfile=/var/log/supervisor/nginx-error.log
-
-[program:openclaw]
-command=openclaw gateway --port ${GATEWAY_PORT} --bind loopback
-autostart=true
-autorestart=true
-priority=20
-stdout_logfile=/var/log/supervisor/openclaw.log
-stderr_logfile=/var/log/supervisor/openclaw-error.log
-environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
-EOF
-
-# =============================================================================
-# Start supervisord (which manages nginx and openclaw)
-# =============================================================================
-log_success "Starting OpenClaw Gateway on port $GATEWAY_PORT"
+log_success "Configuration complete"
+log_info "OpenClaw Gateway configured on port $GATEWAY_PORT"
 log_info "Web interface available at: http://localhost:$PORT"
-log_info "Gateway token: ${OPENCLAW_GATEWAY_TOKEN:0:8}..."
-log_info "Starting supervisord to manage services..."
-
-exec supervisord -c /app/supervisord.conf
+log_info "Use 'systemctl start openclaw' to start the service"
+log_info "Use 'systemctl status openclaw' to check status"
