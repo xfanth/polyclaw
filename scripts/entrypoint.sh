@@ -26,6 +26,20 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # =============================================================================
+# Fix permissions if running as root (for bind mounts)
+# =============================================================================
+if [ "$(id -u)" = "0" ]; then
+    log_info "Running as root, fixing permissions for openclaw user..."
+    chown -R openclaw:openclaw /data 2>/dev/null || true
+    chown -R openclaw:openclaw /var/log/openclaw 2>/dev/null || true
+    chown -R openclaw:openclaw /var/log/supervisor 2>/dev/null || true
+    
+    # Re-run this script as openclaw user
+    log_info "Switching to openclaw user..."
+    exec su -s /bin/bash openclaw -c "cd /data && OPENCLAW_STATE_DIR='$OPENCLAW_STATE_DIR' OPENCLAW_WORKSPACE_DIR='$OPENCLAW_WORKSPACE_DIR' OPENCLAW_GATEWAY_PORT='$OPENCLAW_GATEWAY_PORT' PORT='$PORT' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' /app/scripts/entrypoint.sh"
+fi
+
+# =============================================================================
 # Configuration
 # =============================================================================
 STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
@@ -328,10 +342,8 @@ command=openclaw gateway --port ${GATEWAY_PORT} --bind loopback
 autostart=true
 autorestart=true
 priority=20
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
+stdout_logfile=/var/log/supervisor/openclaw.log
+stderr_logfile=/var/log/supervisor/openclaw-error.log
 environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",NODE_ENV="production"
 EOF
 

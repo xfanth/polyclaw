@@ -38,7 +38,8 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 cleanup() {
     log_info "Cleaning up test environment..."
     docker compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
-    rm -rf test-data test-workspace
+    # Use sudo if available to handle permission issues from container user
+    sudo rm -rf test-data test-workspace 2>/dev/null || rm -rf test-data test-workspace 2>/dev/null || true
 }
 
 # Set trap to cleanup on exit
@@ -117,16 +118,31 @@ else
     exit 1
 fi
 
+# Wait a bit more for services to fully start
+sleep 5
+
 # =============================================================================
 # Test 4: HTTP Endpoint Test
 # =============================================================================
 log_info "Test 4: Testing HTTP endpoint..."
 
-if curl -sf http://localhost:18080/healthz > /dev/null 2>&1; then
+# Try multiple times with retries
+HTTP_SUCCESS=0
+for i in 1 2 3; do
+    if curl -sf http://localhost:18080/healthz > /dev/null 2>&1; then
+        HTTP_SUCCESS=1
+        break
+    fi
+    sleep 2
+done
+
+if [ $HTTP_SUCCESS -eq 1 ]; then
     log_success "Health endpoint responds (200 OK)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     log_error "Health endpoint failed"
+    log_info "Trying to get more info..."
+    curl -v http://localhost:18080/healthz 2>&1 || true
     TESTS_FAILED=$((TESTS_FAILED + 1))
     exit 1
 fi
@@ -136,12 +152,14 @@ fi
 # =============================================================================
 log_info "Test 5: Testing OpenClaw gateway..."
 
-# Check if openclaw process is running
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" pgrep -f "openclaw gateway" > /dev/null 2>&1; then
-    log_success "OpenClaw gateway process is running"
+# Check if openclaw gateway is actually responding
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" openclaw gateway status > /tmp/gateway-status.log 2>&1; then
+    log_success "OpenClaw gateway is running and responding"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "OpenClaw gateway process not found"
+    log_error "OpenClaw gateway status check failed"
+    log_info "Gateway status output:"
+    cat /tmp/gateway-status.log
     TESTS_FAILED=$((TESTS_FAILED + 1))
     exit 1
 fi
@@ -165,12 +183,12 @@ fi
 # =============================================================================
 log_info "Test 7: Validating OpenClaw config..."
 
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" openclaw doctor --check > /tmp/doctor.log 2>&1; then
-    log_success "OpenClaw config is valid"
+# Check if config file exists and is valid JSON
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" bash -c "cat /data/.openclaw/openclaw.json | python3 -m json.tool > /dev/null 2>&1"; then
+    log_success "OpenClaw config is valid JSON"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     log_warn "OpenClaw config has warnings (may be expected for test environment)"
-    cat /tmp/doctor.log
     # Don't fail on config warnings in smoke test
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi

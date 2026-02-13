@@ -41,18 +41,18 @@ const PROVIDER_URLS = {
 };
 
 // Default models per provider
-// Models are objects with name field
+// Models are objects with id and name fields
 const PROVIDER_MODELS = {
-    anthropic: [{ name: 'claude-sonnet-4-5-20250929' }],
-    openai: [{ name: 'gpt-4o' }],
-    openrouter: [{ name: 'anthropic/claude-sonnet-4-5' }],
-    gemini: [{ name: 'gemini-2.5-pro' }],
-    groq: [{ name: 'llama-3.1-70b-versatile' }],
-    cerebras: [{ name: 'llama-3.1-70b' }],
-    kimi: [{ name: 'kimi-k2.5' }],
-    zai: [{ name: 'glm-4.7' }],
-    opencode: [{ name: 'kimi-k2.5' }],
-    copilot: [{ name: 'gpt-4o' }],
+    anthropic: [{ id: 'claude-sonnet-4-5-20250929', name: 'claude-sonnet-4-5-20250929' }],
+    openai: [{ id: 'gpt-4o', name: 'gpt-4o' }],
+    openrouter: [{ id: 'anthropic/claude-sonnet-4-5', name: 'anthropic/claude-sonnet-4-5' }],
+    gemini: [{ id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' }],
+    groq: [{ id: 'llama-3.1-70b-versatile', name: 'llama-3.1-70b-versatile' }],
+    cerebras: [{ id: 'llama-3.1-70b', name: 'llama-3.1-70b' }],
+    kimi: [{ id: 'kimi-k2.5', name: 'kimi-k2.5' }],
+    zai: [{ id: 'glm-4.7', name: 'glm-4.7' }],
+    opencode: [{ id: 'kimi-k2.5', name: 'kimi-k2.5' }],
+    copilot: [{ id: 'gpt-4o', name: 'gpt-4o' }],
 };
 
 function buildConfig() {
@@ -105,13 +105,13 @@ function buildConfig() {
     }
 
     // Gateway
+    config.gateway = {
+        mode: 'local'
+    };
     if (process.env.OPENCLAW_GATEWAY_TOKEN) {
-        config.gateway = {
-            auth: { token: process.env.OPENCLAW_GATEWAY_TOKEN }
-        };
+        config.gateway.auth = { token: process.env.OPENCLAW_GATEWAY_TOKEN };
     }
     if (process.env.OPENCLAW_GATEWAY_BIND) {
-        config.gateway = config.gateway || {};
         config.gateway.bind = process.env.OPENCLAW_GATEWAY_BIND;
     }
 

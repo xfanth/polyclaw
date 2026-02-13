@@ -150,7 +150,7 @@ RUN groupadd -r openclaw -g 10000 \
     && mkdir -p /data/.openclaw/.bun/bin \
     && ln -sf /root/.bun/bin/bun /data/.openclaw/.bun/bin/bun \
     && ln -sf /root/.bun/bin/bunx /data/.openclaw/.bun/bin/bunx \
-    && chown -R openclaw:openclaw /data/.openclaw/.bun
+    && chown -R openclaw:openclaw /data
 
 # Copy OpenClaw from builder
 COPY --from=builder --chown=openclaw:openclaw /build /opt/openclaw/app
@@ -166,7 +166,7 @@ RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /opt/openclaw/app/openclaw.mj
 
 # Set up directories with proper permissions
 RUN mkdir -p /data/.openclaw /data/workspace /app/config /var/log/openclaw \
-    && chown -R openclaw:openclaw /data /var/log/openclaw \
+    && chown -R openclaw:openclaw /var/log/openclaw \
     && chown -R openclaw:openclaw /var/log/nginx
 
 # Remove default nginx site and make nginx directories writable by openclaw
@@ -214,8 +214,8 @@ EXPOSE 8080 18789
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD /app/scripts/healthcheck.sh
 
-# Switch to non-root user
-USER openclaw
+# Note: Container starts as root to fix bind mount permissions,
+# then entrypoint switches to openclaw user
 
 # Set working directory
 WORKDIR /data
