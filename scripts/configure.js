@@ -41,17 +41,18 @@ const PROVIDER_URLS = {
 };
 
 // Default models per provider
+// Models are objects with id field
 const PROVIDER_MODELS = {
-    anthropic: ['claude-sonnet-4-5-20250929'],
-    openai: ['gpt-4o'],
-    openrouter: ['anthropic/claude-sonnet-4-5'],
-    gemini: ['gemini-2.5-pro'],
-    groq: ['llama-3.1-70b-versatile'],
-    cerebras: ['llama-3.1-70b'],
-    kimi: ['kimi-k2.5'],
-    zai: ['glm-4.7'],
-    opencode: ['kimi-k2.5'],
-    copilot: ['gpt-4o'],
+    anthropic: [{ id: 'claude-sonnet-4-5-20250929' }],
+    openai: [{ id: 'gpt-4o' }],
+    openrouter: [{ id: 'anthropic/claude-sonnet-4-5' }],
+    gemini: [{ id: 'gemini-2.5-pro' }],
+    groq: [{ id: 'llama-3.1-70b-versatile' }],
+    cerebras: [{ id: 'llama-3.1-70b' }],
+    kimi: [{ id: 'kimi-k2.5' }],
+    zai: [{ id: 'glm-4.7' }],
+    opencode: [{ id: 'kimi-k2.5' }],
+    copilot: [{ id: 'gpt-4o' }],
 };
 
 function buildConfig() {
@@ -121,7 +122,8 @@ function buildConfig() {
             defaultProfile: process.env.BROWSER_DEFAULT_PROFILE || 'remote',
             profiles: {
                 remote: {
-                    cdpUrl: process.env.BROWSER_CDP_URL
+                    cdpUrl: process.env.BROWSER_CDP_URL,
+                    color: '#FF4500'
                 }
             }
         };
