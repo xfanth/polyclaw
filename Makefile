@@ -4,7 +4,7 @@
 # Convenient commands for managing OpenClaw Docker deployment
 # =============================================================================
 
-.PHONY: help build up down logs shell config test clean update restart status
+.PHONY: help build up down logs shell config test smoke-test clean update restart status
 
 # Default target
 .DEFAULT_GOAL := help
@@ -193,6 +193,11 @@ test: ## Run basic tests
 	@echo "$(BLUE)3. Checking configuration...$(NC)"
 	@docker compose exec openclaw test -f /data/.openclaw/openclaw.json && echo "$(GREEN)✓ Configuration file exists$(NC)" || echo "$(RED)✗ Configuration file not found$(NC)"
 	@echo "$(GREEN)Tests complete!$(NC)"
+
+smoke-test: ## Run comprehensive smoke tests (builds image and tests from scratch)
+	@echo "$(BLUE)Running smoke tests...$(NC)"
+	@chmod +x scripts/smoke-test.sh
+	@./scripts/smoke-test.sh
 
 # =============================================================================
 # WhatsApp
