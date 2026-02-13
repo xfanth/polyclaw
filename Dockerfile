@@ -118,6 +118,9 @@ RUN curl -fsSL https://bun.sh/install | bash \
 # Install npm via Node.js (node is already installed via node:22-bookworm base)
 RUN npm install -g npm@latest
 
+# Enable corepack for pnpm and yarn
+RUN corepack enable
+
 # Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
