@@ -2,7 +2,7 @@
 # OpenClaw Docker Auto-Update Workflow
 # =============================================================================
 # This workflow automatically rebuilds the Docker image when OpenClaw
-# releases a new version.
+# releases a new version or when main branch updates.
 # =============================================================================
 
 name: Auto-Update Check
@@ -29,54 +29,87 @@ jobs:
   check-update:
     name: Check for OpenClaw Updates
     runs-on: ubuntu-latest
-    
+
     outputs:
-      has_update: ${{ steps.check.outputs.has_update }}
-      latest_version: ${{ steps.check.outputs.latest_version }}
-      current_version: ${{ steps.check.outputs.current_version }}
-    
+      tagged_has_update: ${{ steps.check.outputs.tagged_has_update }}
+      tagged_version: ${{ steps.check.outputs.tagged_version }}
+      tagged_commit: ${{ steps.check.outputs.tagged_commit }}
+      tagged_current_commit: ${{ steps.check.outputs.tagged_current_commit }}
+      main_has_update: ${{ steps.check.outputs.main_has_update }}
+      main_commit: ${{ steps.check.outputs.main_commit }}
+      main_current_commit: ${{ steps.check.outputs.main_current_commit }}
+
     steps:
       # -----------------------------------------------------------------------
       # Checkout repository
       # -----------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       # -----------------------------------------------------------------------
-      # Get latest OpenClaw version
+      # Get latest OpenClaw tagged version and main commit
       # -----------------------------------------------------------------------
-      - name: Get latest OpenClaw version
+      - name: Get latest OpenClaw tagged version and main commit
         id: check
         run: |
           # Get the latest release tag from OpenClaw repo
-          LATEST_VERSION=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name // "main"')
-          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-          
-          # Get current version from our last build (if tracked)
-          if [ -f .openclaw-version ]; then
-            CURRENT_VERSION=$(cat .openclaw-version)
+          LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name // "none"')
+          echo "tagged_version=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+          # Get the commit hash for the latest tag
+          if [ "$LATEST_TAG" != "none" ]; then
+            TAGGED_COMMIT=$(curl -s https://api.github.com/repos/openclaw/openclaw/git/refs/tags/$LATEST_TAG | jq -r '.object.sha // "none"')
+            echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
           else
-            CURRENT_VERSION="unknown"
+            TAGGED_COMMIT="none"
+            echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
           fi
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          
-          # Check if update is needed
-          if [ "$LATEST_VERSION" != "$CURRENT_VERSION" ]; then
-            echo "has_update=true" >> $GITHUB_OUTPUT
-            echo "New version available: $LATEST_VERSION (current: $CURRENT_VERSION)"
+
+          # Get the commit hash for main branch
+          MAIN_COMMIT=$(curl -s https://api.github.com/repos/openclaw/openclaw/commits/main | jq -r '.sha // "none"')
+          echo "main_commit=$MAIN_COMMIT" >> $GITHUB_OUTPUT
+
+          # Get current tracked commits
+          if [ -f .openclaw-tagged-commit ]; then
+            TAGGED_CURRENT=$(cat .openclaw-tagged-commit)
           else
-            echo "has_update=false" >> $GITHUB_OUTPUT
-            echo "No update needed. Current version: $CURRENT_VERSION"
+            TAGGED_CURRENT="none"
+          fi
+          echo "tagged_current_commit=$TAGGED_CURRENT" >> $GITHUB_OUTPUT
+
+          if [ -f .openclaw-main-commit ]; then
+            MAIN_CURRENT=$(cat .openclaw-main-commit)
+          else
+            MAIN_CURRENT="none"
+          fi
+          echo "main_current_commit=$MAIN_CURRENT" >> $GITHUB_OUTPUT
+
+          # Check if tagged version update is needed
+          if [ "$TAGGED_COMMIT" != "none" ] && [ "$TAGGED_COMMIT" != "$TAGGED_CURRENT" ]; then
+            echo "tagged_has_update=true" >> $GITHUB_OUTPUT
+            echo "New tagged version available: $LATEST_TAG ($TAGGED_COMMIT) (current: $TAGGED_CURRENT)"
+          else
+            echo "tagged_has_update=false" >> $GITHUB_OUTPUT
+            echo "No tagged update needed. Current: $TAGGED_CURRENT"
+          fi
+
+          # Check if main update is needed
+          if [ "$MAIN_COMMIT" != "none" ] && [ "$MAIN_COMMIT" != "$MAIN_CURRENT" ]; then
+            echo "main_has_update=true" >> $GITHUB_OUTPUT
+            echo "New main commit available: $MAIN_COMMIT (current: $MAIN_CURRENT)"
+          else
+            echo "main_has_update=false" >> $GITHUB_OUTPUT
+            echo "No main update needed. Current: $MAIN_CURRENT"
           fi
 
   # ===========================================================================
-  # Create Pull Request if Update Available
+  # Create Pull Request for Tagged Version
   # ===========================================================================
-  create-pr:
-    name: Create Pull Request
+  create-tagged-pr:
+    name: Create Tagged Version PR
     runs-on: ubuntu-latest
     needs: check-update
-    if: needs.check-update.outputs.has_update == 'true'
+    if: needs.check-update.outputs.tagged_has_update == 'true'
 
     permissions:
       contents: write
@@ -92,32 +125,33 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # -----------------------------------------------------------------------
-      # Update version file and create PR
+      # Update version files and create PR
       # -----------------------------------------------------------------------
-      - name: Update version and create PR
+      - name: Update tagged version files
         run: |
-          echo "${{ needs.check-update.outputs.latest_version }}" > .openclaw-version
+          echo "${{ needs.check-update.outputs.tagged_commit }}" > .openclaw-tagged-commit
+          echo "${{ needs.check-update.outputs.tagged_version }}" > .openclaw-version
 
-      - name: Create Pull Request
+      - name: Create Pull Request for Tagged Version
         uses: peter-evans/create-pull-request@v7
         with:
-          branch: auto-update/${{ needs.check-update.outputs.latest_version }}
-          title: "chore: update OpenClaw to ${{ needs.check-update.outputs.latest_version }}"
+          branch: auto-update/${{ needs.check-update.outputs.tagged_version }}
+          title: "chore: update OpenClaw to ${{ needs.check-update.outputs.tagged_version }}"
           body: |
-            ## OpenClaw Update Available
+            ## OpenClaw Tagged Version Update
 
-            This PR updates OpenClaw to version `${{ needs.check-update.outputs.latest_version }}`.
+            This PR updates OpenClaw to tagged version `${{ needs.check-update.outputs.tagged_version }}`.
 
-            - **New Version:** `${{ needs.check-update.outputs.latest_version }}`
-            - **Previous Version:** `${{ needs.check-update.outputs.current_version }}`
+            - **New Version:** `${{ needs.check-update.outputs.tagged_version }}`
+            - **New Commit:** `${{ needs.check_update.outputs.tagged_commit }}`
+            - **Previous Commit:** `${{ needs.check-update.outputs.tagged_current_commit }}`
 
             ### Changes
-            See [OpenClaw Release Notes](https://github.com/openclaw/openclaw/releases/tag/${{ needs.check-update.outputs.latest_version }})
+            See [OpenClaw Release Notes](https://github.com/openclaw/openclaw/releases/tag/${{ needs.check-update.outputs.tagged_version }})
 
             ### Docker Images
-            Once this PR is merged and the build completes, the following images will be available:
-            - `ghcr.io/${{ github.repository }}:latest`
-            - `ghcr.io/${{ github.repository }}:${{ needs.check-update.outputs.latest_version }}`
+            Once this PR is merged and the build completes, the following image will be available:
+            - `ghcr.io/${{ github.repository }}:${{ needs.check-update.outputs.tagged_version }}`
 
             ### Verification
             The Docker build workflow will automatically run on this PR, including:
@@ -129,6 +163,70 @@ jobs:
 
             ---
             *This PR was automatically created by the auto-update workflow.*
-          commit-message: "chore: update OpenClaw to ${{ needs.check-update.outputs.latest_version }}"
+          commit-message: "chore: update OpenClaw to ${{ needs.check-update.outputs.tagged_version }}"
+          labels: automated, update
+          delete-branch: true
+
+  # ===========================================================================
+  # Create Pull Request for Main Branch
+  # ===========================================================================
+  create-main-pr:
+    name: Create Main Branch PR
+    runs-on: ubuntu-latest
+    needs: check-update
+    if: needs.check-update.outputs.main_has_update == 'true'
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Checkout repository
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # Update main commit file and create PR
+      # -----------------------------------------------------------------------
+      - name: Update main commit file
+        run: |
+          echo "${{ needs.check-update.outputs.main_commit }}" > .openclaw-main-commit
+          echo "oc_main" > .openclaw-version
+
+      - name: Create Pull Request for Main Branch
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: auto-update/oc_main-${{ needs.check-update.outputs.main_commit }}
+          title: "chore: update OpenClaw to latest main"
+          body: |
+            ## OpenClaw Main Branch Update
+
+            This PR updates OpenClaw to the latest commit on the main branch.
+
+            - **New Commit:** `${{ needs.check-update.outputs.main_commit }}`
+            - **Previous Commit:** `${{ needs.check-update.outputs.main_current_commit }}`
+
+            ### Changes
+            This update tracks the latest development changes from the OpenClaw main branch.
+
+            ### Docker Images
+            Once this PR is merged and the build completes, the following image will be available:
+            - `ghcr.io/${{ github.repository }}:oc_main`
+
+            ### Verification
+            The Docker build workflow will automatically run on this PR, including:
+            - Smoke tests
+            - Security scans
+            - Container validation
+
+            Please review and merge if all checks pass.
+
+            ---
+            *This PR was automatically created by the auto-update workflow.*
+          commit-message: "chore: update OpenClaw to latest main commit"
           labels: automated, update
           delete-branch: true
