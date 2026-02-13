@@ -51,6 +51,31 @@ Open your browser to `http://localhost:8080` and log in with:
 - Username: `admin` (or your `AUTH_USERNAME`)
 - Password: Your `AUTH_PASSWORD`
 
+## Systemd Service (Optional)
+
+To manage OpenClaw with systemd on your host:
+
+```bash
+# Copy the systemd service file
+sudo cp config/openclaw.service /etc/systemd/system/
+
+# Edit the service file to match your installation path
+sudo nano /etc/systemd/system/openclaw.service
+
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable and start the service
+sudo systemctl enable openclaw
+sudo systemctl start openclaw
+
+# Check status
+sudo systemctl status openclaw
+
+# View logs
+sudo journalctl -u openclaw -f
+```
+
 ## Configuration
 
 ### AI Providers

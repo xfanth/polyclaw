@@ -180,11 +180,14 @@ RUN rm -f /etc/nginx/sites-enabled/default \
     && chown -R openclaw:openclaw /var/log/nginx \
     && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
     && chown -R openclaw:openclaw /tmp/nginx \
-    && sed -i 's|pid /run/nginx.pid|pid /tmp/nginx.pid|' /etc/nginx/nginx.conf
+    && sed -i 's|pid /run/nginx.pid|pid /tmp/nginx.pid|' /etc/nginx/nginx.conf \
+    && mkdir -p /var/log/supervisor \
+    && chown -R openclaw:openclaw /var/log/supervisor
 
 # Copy scripts and configuration
 COPY --chown=openclaw:openclaw scripts/ /app/scripts/
 COPY --chown=openclaw:openclaw nginx.conf /etc/nginx/sites-available/openclaw
+COPY --chown=openclaw:openclaw config/openclaw.service /app/config/openclaw.service
 RUN chmod +x /app/scripts/*.sh \
     && ln -s /etc/nginx/sites-available/openclaw /etc/nginx/sites-enabled/openclaw
 

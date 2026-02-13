@@ -293,34 +293,43 @@ nginx -t || {
 }
 
 # =============================================================================
-# Start services
+# Create supervisord configuration
 # =============================================================================
-log_info "Starting services..."
+log_info "Creating supervisord configuration..."
 
-# Start nginx in background
-log_info "Starting Nginx..."
-nginx
+mkdir -p /var/log/supervisor
 
-# Wait a moment for nginx to start
-sleep 2
+cat > /app/supervisord.conf << EOF
+[supervisord]
+nodaemon=true
+user=openclaw
+logfile=/var/log/supervisor/supervisord.log
+pidfile=/tmp/supervisord.pid
 
-# Verify nginx is running
-if ! curl -sf http://localhost:$PORT/healthz > /dev/null 2>&1; then
-    log_warn "Nginx health check failed initially, continuing anyway..."
-fi
+[program:nginx]
+command=nginx -g "daemon off;"
+autostart=true
+autorestart=true
+priority=10
+stdout_logfile=/var/log/supervisor/nginx.log
+stderr_logfile=/var/log/supervisor/nginx-error.log
+
+[program:openclaw]
+command=openclaw gateway --port ${GATEWAY_PORT} --bind loopback
+autostart=true
+autorestart=true
+priority=20
+stdout_logfile=/var/log/supervisor/openclaw.log
+stderr_logfile=/var/log/supervisor/openclaw-error.log
+environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
+EOF
 
 # =============================================================================
-# Start OpenClaw Gateway
+# Start supervisord (which manages nginx and openclaw)
 # =============================================================================
 log_success "Starting OpenClaw Gateway on port $GATEWAY_PORT"
 log_info "Web interface available at: http://localhost:$PORT"
 log_info "Gateway token: ${OPENCLAW_GATEWAY_TOKEN:0:8}..."
+log_info "Starting supervisord to manage services..."
 
-# Export all environment variables for OpenClaw
-export OPENCLAW_GATEWAY_TOKEN
-export OPENCLAW_GATEWAY_PORT
-export OPENCLAW_STATE_DIR
-export OPENCLAW_WORKSPACE_DIR
-
-# Start OpenClaw gateway
-exec openclaw gateway --port "$GATEWAY_PORT" --bind loopback
+exec supervisord -c /app/supervisord.conf

@@ -1,0 +1,37 @@
+# =============================================================================
+# OpenClaw Docker Systemd Service
+# =============================================================================
+# Install: sudo cp config/openclaw.service /etc/systemd/system/
+# Enable:  sudo systemctl enable openclaw
+# Start:   sudo systemctl start openclaw
+# Status:  sudo systemctl status openclaw
+# =============================================================================
+
+[Unit]
+Description=OpenClaw AI Gateway (Docker)
+Documentation=https://docs.openclaw.ai/
+Requires=docker.service
+After=docker.service network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+WorkingDirectory=/opt/openclaw-docker
+
+# Pull latest image and start
+ExecStartPre=-/usr/bin/docker compose -f /opt/openclaw-docker/docker-compose.yml pull
+ExecStartPre=-/usr/bin/docker compose -f /opt/openclaw-docker/docker-compose.yml down
+
+# Start the service
+ExecStart=/usr/bin/docker compose -f /opt/openclaw-docker/docker-compose.yml up
+
+# Stop the service
+ExecStop=/usr/bin/docker compose -f /opt/openclaw-docker/docker-compose.yml down
+
+# Reload
+ExecReload=-/usr/bin/docker compose -f /opt/openclaw-docker/docker-compose.yml pull
+ExecReload=/usr/bin/docker compose -f /opt/openclaw-docker/docker-compose.yml up -d
+
+[Install]
+WantedBy=multi-user.target
