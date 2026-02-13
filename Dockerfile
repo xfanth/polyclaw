@@ -110,6 +110,14 @@ RUN apt-get update \
 # Install Homebrew (Linuxbrew) for additional package management
 RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
 
+# Install Bun runtime
+RUN curl -fsSL https://bun.sh/install | bash \
+    && ln -sf /root/.bun/bin/bun /usr/local/bin/bun \
+    && ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
+
+# Install npm via Node.js (node is already installed via node:22-bookworm base)
+RUN npm install -g npm@latest
+
 # Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -135,7 +143,11 @@ RUN ARCH=$(dpkg --print-architecture) \
 RUN groupadd -r openclaw -g 10000 \
     && useradd -r -g openclaw -u 10000 -m -s /bin/bash openclaw \
     && usermod -aG sudo openclaw \
-    && echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw
+    && echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw \
+    && mkdir -p /data/.openclaw/.bun/bin \
+    && ln -sf /root/.bun/bin/bun /data/.openclaw/.bun/bin/bun \
+    && ln -sf /root/.bun/bin/bunx /data/.openclaw/.bun/bin/bunx \
+    && chown -R openclaw:openclaw /data/.openclaw/.bun
 
 # Copy OpenClaw from builder
 COPY --from=builder --chown=openclaw:openclaw /build /opt/openclaw/app
@@ -185,6 +197,7 @@ ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 ENV OPENCLAW_CONFIG_PATH=/data/.openclaw/openclaw.json
 ENV OPENCLAW_CUSTOM_CONFIG=/app/config/openclaw.json
 ENV HOME=/data/.openclaw
+ENV PATH="/data/.openclaw/.bun/bin:/root/.bun/bin:${PATH}"
 
 # Expose ports
 EXPOSE 8080 18789
