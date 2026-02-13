@@ -1,5 +1,8 @@
 # OpenClaw Docker
 
+[![CodeQL](https://github.com/n00b001/openclaw/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/github-code-scanning/codeql)
+[![Docker Build and Push](https://github.com/n00b001/openclaw/actions/workflows/docker-build.yml/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/docker-build.yml)
+[![Smoke Test](https://github.com/n00b001/openclaw/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/smoke-test.yml)
 [![Docker Build](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml/badge.svg)](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://ghcr.io/openclaw/openclaw-docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
