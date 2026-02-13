@@ -117,7 +117,7 @@ while [ $(($(date +%s) - START_TIME)) -lt $TEST_TIMEOUT ]; do
         HEALTHY=1
         break
     fi
-    
+
     # Show container logs if it's restarting
     STATUS=$(docker compose -f "$COMPOSE_FILE" ps "$SERVICE_NAME" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | head -1)
     if echo "$STATUS" | grep -q "exited\|dead"; then
@@ -127,7 +127,7 @@ while [ $(($(date +%s) - START_TIME)) -lt $TEST_TIMEOUT ]; do
         TESTS_FAILED=$((TESTS_FAILED + 1))
         exit 1
     fi
-    
+
     echo -n "."
     sleep 2
 done

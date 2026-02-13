@@ -34,10 +34,10 @@ jobs:
   create-release:
     name: Create Release Tag
     runs-on: ubuntu-latest
-    
+
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
-    
+
     steps:
       # -----------------------------------------------------------------------
       # Checkout repository
@@ -47,7 +47,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       # -----------------------------------------------------------------------
       # Get latest tag and bump version
       # -----------------------------------------------------------------------
@@ -57,20 +57,20 @@ jobs:
           # Get the latest tag, default to v0.0.0 if none exists
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "Latest tag: $LATEST_TAG"
-          
+
           # Remove 'v' prefix for version calculation
           VERSION=${LATEST_TAG#v}
-          
+
           # Split version into components
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
-          
+
           # Default to 0 if empty
           MAJOR=${MAJOR:-0}
           MINOR=${MINOR:-0}
           PATCH=${PATCH:-0}
-          
+
           # Bump based on release type
           case "${{ inputs.release_type }}" in
             major)
@@ -86,30 +86,30 @@ jobs:
               PATCH=$((PATCH + 1))
               ;;
           esac
-          
+
           NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           echo "New version: $NEW_VERSION"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-      
+
       # -----------------------------------------------------------------------
       # Create and push tag
       # -----------------------------------------------------------------------
       - name: Create and push tag
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
-          
+
           # Configure git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Create tag
           git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
-          
+
           # Push tag
           git push origin "$NEW_VERSION"
-          
+
           echo "Created and pushed tag: $NEW_VERSION"
-      
+
       # -----------------------------------------------------------------------
       # Output release info
       # -----------------------------------------------------------------------

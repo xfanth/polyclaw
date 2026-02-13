@@ -23,20 +23,20 @@ services:
     #   dockerfile: Dockerfile
     #   args:
     #     OPENCLAW_VERSION: main
-    
+
     # Or use pre-built image from GitHub Packages (recommended)
     image: ${OPENCLAW_IMAGE:-ghcr.io/n00b001/openclaw:latest}
-    
+
     container_name: openclaw-gateway
     hostname: openclaw
     user: openclaw
-    
+
     # Ports
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
       # Uncomment to expose gateway directly (not recommended)
       # - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"
-    
+
     # Environment Variables
     environment:
       # ---------------------------------------------------------------------
@@ -60,20 +60,20 @@ services:
       - AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY:-}
       - SYNTHETIC_API_KEY=${SYNTHETIC_API_KEY:-}
       - XIAOMI_API_KEY=${XIAOMI_API_KEY:-}
-      
+
       # AWS Bedrock (optional)
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
       - BEDROCK_PROVIDER_FILTER=${BEDROCK_PROVIDER_FILTER:-anthropic}
-      
+
       # Ollama (optional)
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
-      
+
       # Deepgram (optional)
       - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
-      
+
       # ---------------------------------------------------------------------
       # Model Selection
       # ---------------------------------------------------------------------
@@ -81,20 +81,20 @@ services:
       - OPENCLAW_FALLBACK_MODELS=${OPENCLAW_FALLBACK_MODELS:-}
       - OPENCLAW_IMAGE_MODEL_PRIMARY=${OPENCLAW_IMAGE_MODEL_PRIMARY:-}
       - OPENCLAW_IMAGE_MODEL_FALLBACKS=${OPENCLAW_IMAGE_MODEL_FALLBACKS:-}
-      
+
       # ---------------------------------------------------------------------
       # Authentication
       # ---------------------------------------------------------------------
       - AUTH_USERNAME=${AUTH_USERNAME:-admin}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-}
-      
+
       # ---------------------------------------------------------------------
       # Gateway Configuration
       # ---------------------------------------------------------------------
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
       - OPENCLAW_GATEWAY_BIND=${OPENCLAW_GATEWAY_BIND:-loopback}
-      
+
       # ---------------------------------------------------------------------
       # Storage Paths
       # ---------------------------------------------------------------------
@@ -102,7 +102,7 @@ services:
       - OPENCLAW_WORKSPACE_DIR=/data/workspace
       - OPENCLAW_CONFIG_PATH=/data/.openclaw/openclaw.json
       - OPENCLAW_CUSTOM_CONFIG=/app/config/openclaw.json
-      
+
       # ---------------------------------------------------------------------
       # Browser Tool Configuration
       # ---------------------------------------------------------------------
@@ -112,14 +112,14 @@ services:
       - BROWSER_SNAPSHOT_MODE=${BROWSER_SNAPSHOT_MODE:-}
       - BROWSER_REMOTE_TIMEOUT_MS=${BROWSER_REMOTE_TIMEOUT_MS:-}
       - BROWSER_REMOTE_HANDSHAKE_TIMEOUT_MS=${BROWSER_REMOTE_HANDSHAKE_TIMEOUT_MS:-}
-      
+
       # ---------------------------------------------------------------------
       # Hooks (Webhook Automation)
       # ---------------------------------------------------------------------
       - HOOKS_ENABLED=${HOOKS_ENABLED:-}
       - HOOKS_TOKEN=${HOOKS_TOKEN:-}
       - HOOKS_PATH=${HOOKS_PATH:-/hooks}
-      
+
       # ---------------------------------------------------------------------
       # WhatsApp Configuration
       # ---------------------------------------------------------------------
@@ -131,7 +131,7 @@ services:
       - WHATSAPP_SELF_CHAT_MODE=${WHATSAPP_SELF_CHAT_MODE:-}
       - WHATSAPP_MEDIA_MAX_MB=${WHATSAPP_MEDIA_MAX_MB:-}
       - WHATSAPP_HISTORY_LIMIT=${WHATSAPP_HISTORY_LIMIT:-}
-      
+
       # ---------------------------------------------------------------------
       # Telegram Configuration
       # ---------------------------------------------------------------------
@@ -140,7 +140,7 @@ services:
       - TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM:-}
       - TELEGRAM_GROUP_POLICY=${TELEGRAM_GROUP_POLICY:-}
       - TELEGRAM_GROUP_ALLOW_FROM=${TELEGRAM_GROUP_ALLOW_FROM:-}
-      
+
       # ---------------------------------------------------------------------
       # Discord Configuration
       # ---------------------------------------------------------------------
@@ -148,7 +148,7 @@ services:
       - DISCORD_DM_POLICY=${DISCORD_DM_POLICY:-pairing}
       - DISCORD_DM_ALLOW_FROM=${DISCORD_DM_ALLOW_FROM:-}
       - DISCORD_GROUP_POLICY=${DISCORD_GROUP_POLICY:-}
-      
+
       # ---------------------------------------------------------------------
       # Slack Configuration
       # ---------------------------------------------------------------------
@@ -156,27 +156,27 @@ services:
       - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
       - SLACK_DM_POLICY=${SLACK_DM_POLICY:-pairing}
       - SLACK_GROUP_POLICY=${SLACK_GROUP_POLICY:-}
-      
+
       # ---------------------------------------------------------------------
       # 1Password Integration
       # ---------------------------------------------------------------------
       - OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN:-}
-      
+
       # ---------------------------------------------------------------------
       # GOG/Galaxy
       # ---------------------------------------------------------------------
       - GOG_KEYRING_PASSWORD=${GOG_KEYRING_PASSWORD:-}
-      
+
       # ---------------------------------------------------------------------
       # Port Configuration
       # ---------------------------------------------------------------------
       - PORT=${PORT:-8080}
-      
+
       # ---------------------------------------------------------------------
       # Node Environment
       # ---------------------------------------------------------------------
       - NODE_ENV=production
-    
+
     # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
@@ -184,10 +184,10 @@ services:
       timeout: 10s
       start_period: 60s
       retries: 5
-    
+
     # Restart policy for 24/7 operation
     restart: unless-stopped
-    
+
     # Resource limits (adjust based on your needs)
     deploy:
       resources:
@@ -197,12 +197,12 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    
+
     # Security options
     # Note: no-new-privileges disabled to allow sudo for nginx configuration
     # security_opt:
     #   - no-new-privileges:true
-    
+
     # Capabilities
     cap_drop:
       - ALL
@@ -214,7 +214,7 @@ services:
       - DAC_READ_SEARCH
       - NET_BIND_SERVICE
       - KILL
-    
+
     # Volumes for persistence
     volumes:
       # Main data directory - persists config, sessions, skills, plugins
@@ -242,16 +242,16 @@ services:
       - type: volume
         source: openclaw-brew-cache
         target: /data/.openclaw/brew
-    
+
     # Networks
     networks:
       - openclaw-network
-    
+
     # Depends on browser if using browser automation
     depends_on:
       browser:
         condition: service_started
-    
+
     # Logging configuration
     logging:
       driver: "json-file"
@@ -268,38 +268,38 @@ services:
     # Custom browser image with CDP and noVNC support
     # noVNC viewer available at http://browser:6080/vnc.html
     image: ${BROWSER_IMAGE:-ghcr.io/n00b001/cdp_vnc_browser:latest}
-    
+
     container_name: openclaw-browser
     hostname: browser
-    
+
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=${TZ:-UTC}
       - CHROME_CLI=--remote-debugging-port=9222 --no-sandbox --disable-dev-shm-usage
-    
+
     volumes:
       - type: volume
         source: browser-data
         target: /config
-    
+
     # Shared memory for Chrome
     shm_size: 2g
-    
+
     # No ports exposed - accessed internally via CDP and noVNC
-    
+
     restart: unless-stopped
-    
+
     networks:
       - openclaw-network
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9222/json/version"]
       interval: 30s
       timeout: 5s
       start_period: 30s
       retries: 3
-    
+
     logging:
       driver: "json-file"
       options:

@@ -30,7 +30,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # =============================================================================
 if [ "$(id -u)" = "0" ]; then
     log_info "Running as root, fixing permissions for openclaw user..."
-    
+
     # Only chown if we're about to switch to openclaw user
     # This prevents permission issues with bind mounts
     if id openclaw >/dev/null 2>&1; then
@@ -40,7 +40,7 @@ if [ "$(id -u)" = "0" ]; then
         chown -R openclaw:openclaw /var/lib/nginx 2>/dev/null || true
         sync  # Ensure all chown operations complete before proceeding
     fi
-    
+
     # Re-run this script as openclaw user
     log_info "Switching to openclaw user..."
     exec su -s /bin/bash openclaw -c "cd /data && OPENCLAW_STATE_DIR='$OPENCLAW_STATE_DIR' OPENCLAW_WORKSPACE_DIR='$OPENCLAW_WORKSPACE_DIR' OPENCLAW_GATEWAY_PORT='$OPENCLAW_GATEWAY_PORT' PORT='$PORT' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' /app/scripts/entrypoint.sh"
@@ -189,21 +189,21 @@ limit_req_zone $binary_remote_addr zone=openclaw_limit:10m rate=10r/s;
 server {
     listen 8080 default_server;
     server_name _;
-    
+
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    
+
     # Client body size
     client_max_body_size 50M;
-    
+
     # Timeouts
     proxy_connect_timeout 60s;
     proxy_send_timeout 60s;
     proxy_read_timeout 60s;
-    
+
     # Health check endpoint (no auth)
     location /healthz {
         proxy_pass http://openclaw_gateway;
@@ -214,7 +214,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         access_log off;
     }
-    
+
     # Hooks endpoint (special handling)
     location /hooks {
         proxy_pass http://openclaw_gateway;
@@ -223,37 +223,37 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # WebSocket support for hooks
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
-    
+
     # Main application
     location / {
         # Rate limiting
         limit_req zone=openclaw_limit burst=20 nodelay;
-        
+
         # Basic auth if configured
         auth_basic "OpenClaw Gateway";
         auth_basic_user_file /etc/nginx/.htpasswd;
-        
+
         proxy_pass http://openclaw_gateway;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # WebSocket support
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # Buffer settings
         proxy_buffering off;
         proxy_cache off;
     }
-    
+
     # Browser noVNC access (requires browser sidecar with noVNC on port 6080)
     # The browser host should provide noVNC on port 6080
     location /browser/ {
@@ -263,20 +263,20 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # WebSocket support for noVNC
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # Timeouts for long-lived VNC sessions
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
-        
+
         # Buffer settings
         proxy_buffering off;
         proxy_cache off;
     }
-    
+
     # noVNC websockify endpoint
     location /websockify {
         proxy_pass http://browser:6080/websockify;
@@ -285,15 +285,15 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # WebSocket support
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
+
         # Timeouts for long-lived connections
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
-        
+
         # Disable buffering for real-time communication
         proxy_buffering off;
     }
