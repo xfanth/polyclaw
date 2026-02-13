@@ -119,7 +119,7 @@ else
 fi
 
 # Wait a bit more for services to fully start
-sleep 5
+sleep 10
 
 # =============================================================================
 # Test 4: HTTP Endpoint Test
@@ -153,15 +153,50 @@ fi
 log_info "Test 5: Testing OpenClaw gateway..."
 
 # Check if openclaw gateway is actually responding
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" openclaw gateway status > /tmp/gateway-status.log 2>&1; then
+# Run as openclaw user to avoid permission issues
+docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw OPENCLAW_STATE_DIR=/data/.openclaw openclaw gateway status" > /tmp/gateway-status.log 2>&1 || true
+
+# Check for specific error conditions
+GATEWAY_ERRORS=0
+
+# Check for permission denied errors
+if grep -q "EACCES\|permission denied" /tmp/gateway-status.log 2>/dev/null; then
+    log_error "Gateway has permission errors (EACCES)"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+fi
+
+# Check for port conflicts
+if grep -q "Port.*already in use\|address already in use" /tmp/gateway-status.log 2>/dev/null; then
+    log_error "Gateway has port conflicts"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+fi
+
+# Check for systemd errors (these should not cause gateway failure)
+if grep -q "systemd.*unavailable\|systemctl.*unavailable" /tmp/gateway-status.log 2>/dev/null; then
+    log_warn "systemd is unavailable (expected in container environment)"
+fi
+
+# Check if gateway is actually responding via RPC
+if grep -q "RPC probe: ok" /tmp/gateway-status.log 2>/dev/null; then
+    log_success "Gateway RPC probe successful"
+else
+    log_error "Gateway is not responding properly"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+fi
+
+if [ $GATEWAY_ERRORS -eq 0 ]; then
     log_success "OpenClaw gateway is running and responding"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "OpenClaw gateway status check failed"
     log_info "Gateway status output:"
     cat /tmp/gateway-status.log
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    exit 1
+    log_info "Identity directory contents:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la /data/.openclaw/identity/ 2>/dev/null || log_warn "Identity directory not found"
+    log_info "OpenClaw config:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat /data/.openclaw/openclaw.json 2>/dev/null || log_warn "Config file not found"
 fi
 
 # =============================================================================
@@ -179,6 +214,44 @@ else
 fi
 
 # =============================================================================
+# Test 7: Identity Directory Permissions
+# =============================================================================
+log_info "Test 7: Checking identity directory permissions..."
+
+IDENTITY_PERMISSIONS=0
+
+# Check if identity directory exists
+if ! docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -d /data/.openclaw/identity 2>/dev/null; then
+    log_error "Identity directory does not exist"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
+else
+    log_success "Identity directory exists"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# Check if identity directory is writable (as openclaw user)
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw test -w /data/.openclaw/identity" 2>/dev/null; then
+    log_success "Identity directory is writable by openclaw user"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "Identity directory is not writable by openclaw user"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
+fi
+
+# Try to create a test file in identity directory (as openclaw user)
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw touch /data/.openclaw/identity/test-file" 2>/dev/null; then
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw rm /data/.openclaw/identity/test-file" 2>/dev/null || true
+    log_success "openclaw user can write files in identity directory"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "openclaw user cannot write files in identity directory"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
+fi
+
+# =============================================================================
 # Test 7: Config Validation
 # =============================================================================
 log_info "Test 7: Validating OpenClaw config..."
@@ -191,6 +264,44 @@ else
     log_warn "OpenClaw config has warnings (may be expected for test environment)"
     # Don't fail on config warnings in smoke test
     TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# =============================================================================
+# Test 8: OpenClaw Status Check
+# =============================================================================
+log_info "Test 8: Checking OpenClaw full status..."
+
+# Run as openclaw user to avoid permission issues
+docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw OPENCLAW_STATE_DIR=/data/.openclaw openclaw status" > /tmp/openclaw-status.log 2>&1 || true
+
+STATUS_ERRORS=0
+
+# Check for permission denied errors
+if grep -q "EACCES\|permission denied" /tmp/openclaw-status.log 2>/dev/null; then
+    log_error "OpenClaw status shows permission errors"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    STATUS_ERRORS=$((STATUS_ERRORS + 1))
+fi
+
+# Check if gateway is marked as unreachable
+if grep -q "Gateway.*unreachable" /tmp/openclaw-status.log 2>/dev/null; then
+    log_error "OpenClaw status shows gateway is unreachable"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    STATUS_ERRORS=$((STATUS_ERRORS + 1))
+fi
+
+# Check for memory unavailable errors
+if grep -q "Memory.*unavailable" /tmp/openclaw-status.log 2>/dev/null; then
+    log_warn "Memory plugin is unavailable (may be expected in test environment)"
+    # Don't fail on memory warnings
+fi
+
+if [ $STATUS_ERRORS -eq 0 ]; then
+    log_success "OpenClaw status check passed"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_info "OpenClaw status output:"
+    cat /tmp/openclaw-status.log
 fi
 
 # =============================================================================

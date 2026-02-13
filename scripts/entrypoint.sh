@@ -139,6 +139,7 @@ mkdir -p "$STATE_DIR/plugins"
 mkdir -p "$STATE_DIR/npm"
 mkdir -p "$STATE_DIR/brew"
 mkdir -p "$STATE_DIR/logs"
+mkdir -p "$STATE_DIR/identity"
 
 # Create nginx directories that need proper permissions
 mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi 2>/dev/null || true
