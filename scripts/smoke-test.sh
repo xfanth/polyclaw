@@ -49,7 +49,12 @@ trap cleanup EXIT
 # Test 1: Build Docker Image
 # =============================================================================
 log_info "Test 1: Building Docker image..."
-if docker build -t openclaw:smoke-test . > /tmp/build.log 2>&1; then
+
+# Check if image already exists (pre-built in CI)
+if docker image inspect openclaw:smoke-test > /dev/null 2>&1; then
+    log_success "Docker image already exists, skipping build"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+elif docker build -t openclaw:smoke-test . > /tmp/build.log 2>&1; then
     log_success "Docker image built successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
