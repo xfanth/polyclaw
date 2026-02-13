@@ -29,6 +29,7 @@ services:
     
     container_name: openclaw-gateway
     hostname: openclaw
+    user: openclaw
     
     # Ports
     ports:
