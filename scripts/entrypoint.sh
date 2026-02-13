@@ -40,21 +40,6 @@ log_info "Gateway port: $GATEWAY_PORT"
 log_info "External port: $PORT"
 
 # =============================================================================
-# Install extra apt packages (if requested) - requires root
-# =============================================================================
-if [ -n "${OPENCLAW_DOCKER_APT_PACKAGES:-}" ]; then
-    log_info "Installing extra packages: $OPENCLAW_DOCKER_APT_PACKAGES"
-    if [ "$(id -u)" = "0" ]; then
-        apt-get update -qq \
-            && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES \
-            && rm -rf /var/lib/apt/lists/* \
-            && log_success "Extra packages installed successfully"
-    else
-        log_warn "Not running as root, cannot install apt packages. Run with --user root to install packages."
-    fi
-fi
-
-# =============================================================================
 # Validate required environment variables
 # =============================================================================
 

@@ -298,7 +298,6 @@ services:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENCLAW_DOCKER_APT_PACKAGES` | Extra apt packages | - |
 | `TZ` | Timezone | `UTC` |
 
 ## Updating

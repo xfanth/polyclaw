@@ -64,8 +64,6 @@ OPENCLAW_GATEWAY_TOKEN=...
 OPENCLAW_DATA_DIR=/mnt/shuttle/share/app-data/openclaw3
 OPENCLAW_WORKSPACE_DIR=/mnt/shuttle/share/app-data/openclaw3/workspace
 
-# Optional: Extra packages
-OPENCLAW_DOCKER_APT_PACKAGES=neovim curl git sudo build-essential procps file gh
 ```
 
 ### 3. Start OpenClaw
@@ -167,11 +165,7 @@ WHATSAPP_GROUP_POLICY=allowlist
 OP_SERVICE_ACCOUNT_TOKEN=       # 1Password service account
 ```
 
-### Extra Packages
 
-```env
-OPENCLAW_DOCKER_APT_PACKAGES=neovim curl git sudo build-essential procps file gh
-```
 
 ### Port
 
