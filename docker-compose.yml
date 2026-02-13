@@ -247,6 +247,10 @@ services:
       - CHOWN
       - SETGID
       - SETUID
+      - AUDIT_WRITE
+      - DAC_READ_SEARCH
+      - NET_BIND_SERVICE
+      - KILL
     
     # Networks
     networks:

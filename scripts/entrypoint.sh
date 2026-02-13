@@ -164,8 +164,15 @@ node /app/scripts/configure.js
 log_info "Configuring Nginx..."
 
 # Generate nginx configuration
-sudo tee /etc/nginx/sites-available/openclaw > /dev/null << 'EOF'
+tee /etc/nginx/sites-available/openclaw > /dev/null << 'EOF'
 # OpenClaw Nginx Configuration
+
+# Temp directories for non-root nginx
+client_body_temp_path /tmp/nginx/client_body;
+proxy_temp_path /tmp/nginx/proxy;
+fastcgi_temp_path /tmp/nginx/fastcgi;
+uwsgi_temp_path /tmp/nginx/uwsgi;
+scgi_temp_path /tmp/nginx/scgi;
 
 # Upstream for OpenClaw Gateway
 upstream openclaw_gateway {
@@ -293,16 +300,16 @@ EOF
 # Create htpasswd file for basic auth if credentials are provided
 if [ -n "${AUTH_PASSWORD:-}" ]; then
     AUTH_USERNAME="${AUTH_USERNAME:-admin}"
-    echo "$AUTH_USERNAME:$(openssl passwd -apr1 "$AUTH_PASSWORD")" | sudo tee /etc/nginx/.htpasswd > /dev/null
+    echo "$AUTH_USERNAME:$(openssl passwd -apr1 "$AUTH_PASSWORD")" | tee /etc/nginx/.htpasswd > /dev/null
     log_success "HTTP Basic Auth configured for user: $AUTH_USERNAME"
 else
     # Create empty htpasswd to allow all access
-    echo "" | sudo tee /etc/nginx/.htpasswd > /dev/null
+    echo "" | tee /etc/nginx/.htpasswd > /dev/null
     log_warn "No AUTH_PASSWORD set - gateway will be open (not recommended for production)"
 fi
 
 # Test nginx configuration
-sudo nginx -t || {
+nginx -t || {
     log_error "Nginx configuration test failed"
     exit 1
 }
@@ -314,7 +321,7 @@ log_info "Starting services..."
 
 # Start nginx in background
 log_info "Starting Nginx..."
-sudo nginx
+nginx
 
 # Wait a moment for nginx to start
 sleep 2

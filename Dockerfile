@@ -154,8 +154,14 @@ RUN mkdir -p /data/.openclaw /data/workspace /app/config /var/log/openclaw \
     && chown -R openclaw:openclaw /data /var/log/openclaw \
     && chown -R openclaw:openclaw /var/log/nginx
 
-# Remove default nginx site
-RUN rm -f /etc/nginx/sites-enabled/default
+# Remove default nginx site and make nginx directories writable by openclaw
+RUN rm -f /etc/nginx/sites-enabled/default \
+    && chown -R openclaw:openclaw /etc/nginx/sites-available /etc/nginx/sites-enabled \
+    && chmod 755 /etc/nginx/sites-available /etc/nginx/sites-enabled \
+    && mkdir -p /var/log/nginx \
+    && chown -R openclaw:openclaw /var/log/nginx \
+    && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
+    && chown -R openclaw:openclaw /tmp/nginx
 
 # Copy scripts and configuration
 COPY --chown=openclaw:openclaw scripts/ /app/scripts/
