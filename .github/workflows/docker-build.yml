@@ -111,7 +111,7 @@ jobs:
               --limit 5 \
               --json headBranch,status,conclusion,displayTitle)
 
-            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg pr "$PR_NUMBER" '.[] | select(.headBranch | test("pull/request|pull/' + $pr + ')")')
+            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg pr "$PR_NUMBER" '.[] | select(.headBranch | test("pull/request|pull/\($pr)"))')
 
             if [ -n "$MATCHING_RUN" ]; then
               echo "PR #$PR_NUMBER had successful workflow run"
