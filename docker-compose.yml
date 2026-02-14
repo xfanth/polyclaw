@@ -94,6 +94,7 @@ services:
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
       - OPENCLAW_GATEWAY_BIND=${OPENCLAW_GATEWAY_BIND:-loopback}
+      - OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=${OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS:-10.0.0.0/16}
 
       # ---------------------------------------------------------------------
       # Storage Paths
