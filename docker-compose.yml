@@ -213,6 +213,7 @@ services:
       - AUDIT_WRITE
       - DAC_READ_SEARCH
       - NET_BIND_SERVICE
+      - NET_RAW
       - KILL
 
     # Volumes for persistence

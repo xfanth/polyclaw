@@ -2,6 +2,19 @@
 
 This document provides guidelines for AI agents working on this repository.
 
+## Mandatory Git Workflow
+
+**IMPORTANT**: When making ANY code changes, ALWAYS follow this workflow:
+
+1. **git pull** - Get latest changes from remote
+2. **git branch** - Create a feature branch for the work
+3. **git add** - Stage the changes
+4. **git commit** - Commit with descriptive message
+5. **git push** - Push to remote
+6. **create PR** - Create a pull request using `gh pr create`
+
+This workflow is NON-NEGOTIABLE for all code changes.
+
 ## Development Principles
 
 ### Simple is Better Than Complex
