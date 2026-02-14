@@ -34,7 +34,11 @@ RUN corepack enable
 # Clone OpenClaw repository
 WORKDIR /build
 ARG OPENCLAW_VERSION=main
-RUN git clone --depth 1 --branch "${OPENCLAW_VERSION}" https://github.com/openclaw/openclaw.git .
+RUN if [ "${OPENCLAW_VERSION}" = "oc_main" ]; then \
+        git clone --depth 1 --branch main https://github.com/openclaw/openclaw.git .; \
+    else \
+        git clone --depth 1 --branch "${OPENCLAW_VERSION}" https://github.com/openclaw/openclaw.git .; \
+    fi
 
 # Patch workspace dependencies for standalone build
 RUN set -eux; \
