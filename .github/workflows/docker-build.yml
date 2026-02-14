@@ -219,7 +219,7 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            OPENCLAW_VERSION=${{ steps.determine-version.outputs.openclaw_version }}
+            OPENCLAW_VERSION=${{ steps.determine-version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/docker-image.tar
@@ -393,6 +393,12 @@ jobs:
             type=raw,value=${{ steps.determine-version.outputs.version }}
             type=raw,value=latest,enable=${{ steps.determine-version.outputs.version != 'oc_main' }}
             type=sha,prefix=,suffix=,format=short
+          labels: |
+            org.opencontainers.image.title=OpenClaw
+            org.opencontainers.image.description=Self-hosted AI agent gateway
+            org.opencontainers.image.vendor=OpenClaw Community
+            org.opencontainers.image.licenses=MIT
+            openclaw.version=${{ steps.determine-version.outputs.version }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
