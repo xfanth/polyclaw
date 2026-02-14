@@ -185,7 +185,7 @@ jobs:
           else
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building main from n00b001/openclaw branch"
+            echo "Building main from xfanth/openclaw branch"
           fi
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
@@ -426,7 +426,7 @@ jobs:
           else
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building main from n00b001/openclaw branch"
+            echo "Building main from xfanth/openclaw branch"
           fi
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
