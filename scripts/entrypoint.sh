@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
-# OpenClaw Docker Entrypoint Script
+# OpenClaw/PicoClaw Docker Entrypoint Script
 # =============================================================================
 # This script:
-# 1. Installs extra apt packages if requested
-# 2. Validates required environment variables
-# 3. Generates openclaw.json from environment variables
-# 4. Configures nginx reverse proxy
-# 5. Starts the OpenClaw gateway
+# 1. Detects which upstream is running (openclaw or picoclaw)
+# 2. Installs extra apt packages if requested
+# 3. Validates required environment variables
+# 4. Generates configuration from environment variables
+# 5. Configures nginx reverse proxy
+# 6. Starts the gateway
 # =============================================================================
 
 set -e
@@ -26,35 +27,69 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # =============================================================================
+# Detect upstream
+# =============================================================================
+detect_upstream() {
+    if [ -f /opt/openclaw/app/openclaw.mjs ]; then
+        echo "openclaw"
+    elif [ -f /opt/picoclaw/app/picoclaw.mjs ]; then
+        echo "picoclaw"
+    else
+        log_error "No upstream application found!"
+        log_error "Expected either /opt/openclaw/app/openclaw.mjs or /opt/picoclaw/app/picoclaw.mjs"
+        exit 1
+    fi
+}
+
+UPSTREAM="${UPSTREAM:-$(detect_upstream)}"
+log_info "Detected upstream: $UPSTREAM"
+
+# Set upstream-specific paths
+case "$UPSTREAM" in
+    openclaw)
+        CLI_NAME="openclaw"
+        DEFAULT_STATE_DIR="/data/.openclaw"
+        ;;
+    picoclaw)
+        CLI_NAME="picoclaw"
+        DEFAULT_STATE_DIR="/data/.picoclaw"
+        ;;
+    *)
+        log_error "Unknown upstream: $UPSTREAM"
+        exit 1
+        ;;
+esac
+
+# =============================================================================
 # Fix permissions if running as root (for bind mounts)
 # =============================================================================
 if [ "$(id -u)" = "0" ]; then
-    log_info "Running as root, fixing permissions for openclaw user..."
+    log_info "Running as root, fixing permissions for $UPSTREAM user..."
 
-    # Only chown if we're about to switch to openclaw user
+    # Only chown if we're about to switch to the upstream user
     # This prevents permission issues with bind mounts
-    if id openclaw >/dev/null 2>&1; then
-        chown -R openclaw:openclaw /data 2>/dev/null || true
-        chown -R openclaw:openclaw /var/log/openclaw 2>/dev/null || true
-        chown -R openclaw:openclaw /var/log/supervisor 2>/dev/null || true
-        chown -R openclaw:openclaw /var/lib/nginx 2>/dev/null || true
+    if id "$UPSTREAM" >/dev/null 2>&1; then
+        chown -R "$UPSTREAM:$UPSTREAM" /data 2>/dev/null || true
+        chown -R "$UPSTREAM:$UPSTREAM" "/var/log/$UPSTREAM" 2>/dev/null || true
+        chown -R "$UPSTREAM:$UPSTREAM" /var/log/supervisor 2>/dev/null || true
+        chown -R "$UPSTREAM:$UPSTREAM" /var/lib/nginx 2>/dev/null || true
         sync  # Ensure all chown operations complete before proceeding
     fi
 
-    # Re-run this script as openclaw user
-    log_info "Switching to openclaw user..."
-    exec su -s /bin/bash --whitelist-environment=OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_GATEWAY_PORT,PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD openclaw -c 'cd /data && /app/scripts/entrypoint.sh'
+    # Re-run this script as the upstream user
+    log_info "Switching to $UPSTREAM user..."
+    exec su -s /bin/bash --whitelist-environment=UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_GATEWAY_PORT,PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
 fi
 
 # =============================================================================
 # Configuration
 # =============================================================================
-STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
+STATE_DIR="${OPENCLAW_STATE_DIR:-$DEFAULT_STATE_DIR}"
 WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 PORT="${PORT:-8080}"
 
-log_info "Starting OpenClaw Docker Container"
+log_info "Starting $UPSTREAM Docker Container"
 
 # Log version info if available
 if [ -f /app/VERSION ]; then
@@ -102,7 +137,6 @@ PROVIDER_VARS=(
     "SYNTHETIC_API_KEY"
     "COPILOT_GITHUB_TOKEN"
     "XIAOMI_API_KEY"
-    "OPENCODE_API_KEY"
 )
 
 for key in "${PROVIDER_VARS[@]}"; do
@@ -167,14 +201,15 @@ chmod 700 "$STATE_DIR/credentials" 2>/dev/null || true
 # =============================================================================
 # Export environment variables for configure.js
 # =============================================================================
+export UPSTREAM="$UPSTREAM"
 export OPENCLAW_STATE_DIR="$STATE_DIR"
 export OPENCLAW_WORKSPACE_DIR="$WORKSPACE_DIR"
 export HOME="$STATE_DIR"
 
 # =============================================================================
-# Generate openclaw.json from environment variables
+# Generate configuration from environment variables
 # =============================================================================
-log_info "Generating OpenClaw configuration..."
+log_info "Generating $UPSTREAM configuration..."
 node /app/scripts/configure.js
 
 # =============================================================================
@@ -182,18 +217,18 @@ node /app/scripts/configure.js
 # =============================================================================
 log_info "Configuring Nginx..."
 
-# Generate nginx configuration
-tee /etc/nginx/sites-available/openclaw > /dev/null << EOF
-# OpenClaw Nginx Configuration
+# Generate nginx configuration with upstream-specific naming
+tee "/etc/nginx/sites-available/$UPSTREAM" > /dev/null << EOF
+# $UPSTREAM Nginx Configuration
 
-# Upstream for OpenClaw Gateway
-upstream openclaw_gateway {
+# Upstream for $UPSTREAM Gateway
+upstream ${UPSTREAM}_gateway {
     server 127.0.0.1:$GATEWAY_PORT;
     keepalive 32;
 }
 
 # Rate limiting zone
-limit_req_zone \$binary_remote_addr zone=openclaw_limit:10m rate=10r/s;
+limit_req_zone \$binary_remote_addr zone=${UPSTREAM}_limit:10m rate=10r/s;
 
 server {
     listen $PORT default_server;
@@ -215,7 +250,7 @@ server {
 
     # Health check endpoint (no auth)
     location /healthz {
-        proxy_pass http://openclaw_gateway;
+        proxy_pass http://${UPSTREAM}_gateway;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -226,7 +261,7 @@ server {
 
     # Hooks endpoint (special handling)
     location /hooks {
-        proxy_pass http://openclaw_gateway;
+        proxy_pass http://${UPSTREAM}_gateway;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -241,13 +276,13 @@ server {
     # Main application
     location / {
         # Rate limiting
-        limit_req zone=openclaw_limit burst=20 nodelay;
+        limit_req zone=${UPSTREAM}_limit burst=20 nodelay;
 
         # Basic auth if configured
-        auth_basic "OpenClaw Gateway";
+        auth_basic "$UPSTREAM Gateway";
         auth_basic_user_file /etc/nginx/.htpasswd;
 
-        proxy_pass http://openclaw_gateway;
+        proxy_pass http://${UPSTREAM}_gateway;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -329,8 +364,8 @@ nginx -t || {
 # =============================================================================
 # Fix legacy config keys
 # =============================================================================
-log_info "Running openclaw doctor to fix legacy config..."
-/usr/local/bin/openclaw.real doctor --fix || true
+log_info "Running $CLI_NAME doctor to fix legacy config..."
+"/usr/local/bin/$CLI_NAME.real" doctor --fix || true
 
 # =============================================================================
 # Create supervisord configuration
@@ -342,7 +377,7 @@ mkdir -p /var/log/supervisor
 cat > "$STATE_DIR/supervisord.conf" << EOF
 [supervisord]
 nodaemon=true
-user=openclaw
+user=$UPSTREAM
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/tmp/supervisord.pid
 
@@ -354,20 +389,20 @@ priority=10
 stdout_logfile=/var/log/supervisor/nginx.log
 stderr_logfile=/var/log/supervisor/nginx-error.log
 
-[program:openclaw]
-command=/usr/local/bin/openclaw.real gateway --port ${GATEWAY_PORT} --bind loopback
+[program:$UPSTREAM]
+command=/usr/local/bin/$CLI_NAME.real gateway --port ${GATEWAY_PORT} --bind loopback
 autostart=true
 autorestart=true
 priority=20
-stdout_logfile=/var/log/supervisor/openclaw.log
-stderr_logfile=/var/log/supervisor/openclaw-error.log
+stdout_logfile=/var/log/supervisor/$UPSTREAM.log
+stderr_logfile=/var/log/supervisor/$UPSTREAM-error.log
 environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",NODE_ENV="production"
 EOF
 
 # =============================================================================
-# Start supervisord (which manages nginx and openclaw)
+# Start supervisord (which manages nginx and the upstream gateway)
 # =============================================================================
-log_success "Starting OpenClaw Gateway on port $GATEWAY_PORT"
+log_success "Starting $UPSTREAM Gateway on port $GATEWAY_PORT"
 log_info "Web interface available at: http://localhost:$PORT"
 log_info "Gateway token: ${OPENCLAW_GATEWAY_TOKEN:0:8}..."
 log_info "Starting supervisord to manage services..."

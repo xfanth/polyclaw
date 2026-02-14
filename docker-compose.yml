@@ -1,35 +1,40 @@
 # =============================================================================
-# OpenClaw Docker Compose Configuration
+# OpenClaw/PicoClaw Docker Compose Configuration
 # =============================================================================
-# This compose file sets up OpenClaw with:
+# This compose file sets up OpenClaw or PicoClaw with:
 # - Persistent data storage
 # - All AI provider configurations
 # - Channel integrations (WhatsApp, Telegram, Discord, Slack)
 # - Browser automation support
 # - Webhook hooks
 # - Health checks and auto-restart
+#
+# Upstream Selection:
+#   Set UPSTREAM=openclaw or UPSTREAM=picoclaw in .env
+#   The service name and container name will adapt accordingly
 # =============================================================================
 
 version: '3.8'
 
 services:
   # ===========================================================================
-  # OpenClaw Gateway - Main Service
+  # Gateway Service - OpenClaw or PicoClaw
   # ===========================================================================
-  openclaw:
+  gateway:
     # Build from local Dockerfile (for development)
     # build:
     #   context: .
     #   dockerfile: Dockerfile
     #   args:
-    #     OPENCLAW_VERSION: main
+    #     UPSTREAM: ${UPSTREAM:-openclaw}
+    #     UPSTREAM_VERSION: ${UPSTREAM_VERSION:-main}
 
     # Or use pre-built image from GitHub Packages (recommended)
-    image: ${OPENCLAW_IMAGE:-ghcr.io/n00b001/openclaw:latest}
+    image: ${OPENCLAW_IMAGE:-ghcr.io/n00b001/${UPSTREAM:-openclaw}:latest}
 
-    container_name: openclaw-gateway
-    hostname: openclaw
-    user: openclaw
+    container_name: ${UPSTREAM:-openclaw}-gateway
+    hostname: ${UPSTREAM:-openclaw}
+    # User is set dynamically by entrypoint based on upstream
 
     # Ports
     ports:
@@ -39,6 +44,11 @@ services:
 
     # Environment Variables
     environment:
+      # ---------------------------------------------------------------------
+      # Upstream Configuration
+      # ---------------------------------------------------------------------
+      - UPSTREAM=${UPSTREAM:-openclaw}
+
       # ---------------------------------------------------------------------
       # AI Providers (at least one required)
       # ---------------------------------------------------------------------
@@ -96,12 +106,12 @@ services:
       - OPENCLAW_GATEWAY_BIND=${OPENCLAW_GATEWAY_BIND:-loopback}
 
       # ---------------------------------------------------------------------
-      # Storage Paths
+      # Storage Paths (dynamically set based on upstream)
       # ---------------------------------------------------------------------
-      - OPENCLAW_STATE_DIR=/data/.openclaw
+      - OPENCLAW_STATE_DIR=/data/.${UPSTREAM:-openclaw}
       - OPENCLAW_WORKSPACE_DIR=/data/workspace
-      - OPENCLAW_CONFIG_PATH=/data/.openclaw/openclaw.json
-      - OPENCLAW_CUSTOM_CONFIG=/app/config/openclaw.json
+      - OPENCLAW_CONFIG_PATH=/data/.${UPSTREAM:-openclaw}/${UPSTREAM:-openclaw}.json
+      - OPENCLAW_CUSTOM_CONFIG=/app/config/${UPSTREAM:-openclaw}.json
 
       # ---------------------------------------------------------------------
       # Browser Tool Configuration
@@ -219,9 +229,10 @@ services:
     # Volumes for persistence
     volumes:
       # Main data directory - persists config, sessions, skills, plugins
+      # Note: Uses upstream-specific subdirectory
       - type: bind
         source: ${OPENCLAW_DATA_DIR:-./data/.openclaw}
-        target: /data/.openclaw
+        target: /data/.${UPSTREAM:-openclaw}
       # Workspace directory - for agent projects
       - type: bind
         source: ${OPENCLAW_WORKSPACE_DIR:-./data/workspace}
@@ -229,24 +240,24 @@ services:
       # Custom configuration file (optional)
       - type: bind
         source: ${OPENCLAW_CUSTOM_CONFIG:-./config/openclaw.json}
-        target: /app/config/openclaw.json
+        target: /app/config/${UPSTREAM:-openclaw}.json
         read_only: true
       # Logs directory
       - type: bind
         source: ${OPENCLAW_LOGS_DIR:-./logs}
-        target: /var/log/openclaw
+        target: /var/log/${UPSTREAM:-openclaw}
       # NPM cache persistence (for skills/plugins)
       - type: volume
-        source: openclaw-npm-cache
-        target: /data/.openclaw/npm
+        source: gateway-npm-cache
+        target: /data/.${UPSTREAM:-openclaw}/npm
       # Homebrew persistence
       - type: volume
-        source: openclaw-brew-cache
-        target: /data/.openclaw/brew
+        source: gateway-brew-cache
+        target: /data/.${UPSTREAM:-openclaw}/brew
 
     # Networks
     networks:
-      - openclaw-network
+      - gateway-network
 
     # Depends on browser if using browser automation
     depends_on:
@@ -270,7 +281,7 @@ services:
     # noVNC viewer available at http://browser:6080/vnc.html
     image: ${BROWSER_IMAGE:-ghcr.io/n00b001/cdp_vnc_browser:latest}
 
-    container_name: openclaw-browser
+    container_name: gateway-browser
     hostname: browser
 
     environment:
@@ -292,7 +303,7 @@ services:
     restart: unless-stopped
 
     networks:
-      - openclaw-network
+      - gateway-network
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9222/json/version"]
@@ -311,7 +322,7 @@ services:
 # Networks
 # =============================================================================
 networks:
-  openclaw-network:
+  gateway-network:
     driver: bridge
     ipam:
       config:
@@ -321,9 +332,9 @@ networks:
 # Volumes
 # =============================================================================
 volumes:
-  openclaw-npm-cache:
+  gateway-npm-cache:
     driver: local
-  openclaw-brew-cache:
+  gateway-brew-cache:
     driver: local
   browser-data:
     driver: local

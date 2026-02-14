@@ -1,15 +1,23 @@
 # =============================================================================
-# Smoke Test Configuration for OpenClaw Docker
+# Smoke Test Configuration for OpenClaw/PicoClaw Docker
+# =============================================================================
+# Usage:
+#   UPSTREAM=openclaw docker compose -f docker-compose.test.yml up -d
+#   UPSTREAM=picoclaw docker compose -f docker-compose.test.yml up -d
 # =============================================================================
 
 services:
-  openclaw-test:
+  gateway-test:
     build:
       context: .
       dockerfile: Dockerfile
-    image: openclaw:smoke-test
-    container_name: openclaw-smoke-test
+      args:
+        UPSTREAM: ${UPSTREAM:-openclaw}
+        UPSTREAM_VERSION: ${UPSTREAM_VERSION:-main}
+    image: ${UPSTREAM:-openclaw}:smoke-test
+    container_name: ${UPSTREAM:-openclaw}-smoke-test
     environment:
+      - UPSTREAM=${UPSTREAM:-openclaw}
       - OPENCLAW_GATEWAY_TOKEN=test-token-smoke-test
       - OPENROUTER_API_KEY=sk-or-test-key
       - AUTH_PASSWORD=testpass
@@ -21,7 +29,7 @@ services:
     volumes:
       - type: bind
         source: ./test-data
-        target: /data/.openclaw
+        target: /data/.${UPSTREAM:-openclaw}
       - type: bind
         source: ./test-workspace
         target: /data/workspace
@@ -49,7 +57,7 @@ services:
 
   browser:
     image: ghcr.io/n00b001/cdp_vnc_browser:latest
-    container_name: openclaw-browser-test
+    container_name: gateway-browser-test
     environment:
       - PUID=1000
       - PGID=1000

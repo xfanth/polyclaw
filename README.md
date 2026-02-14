@@ -1,4 +1,4 @@
-# OpenClaw Docker
+# OpenClaw/PicoClaw Docker
 
 [![CodeQL](https://github.com/n00b001/openclaw/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/github-code-scanning/codeql)
 [![Docker Build and Push](https://github.com/n00b001/openclaw/actions/workflows/docker-build.yml/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/docker-build.yml)
@@ -7,12 +7,16 @@
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://ghcr.io/openclaw/openclaw-docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A production-ready Docker setup for [OpenClaw](https://github.com/openclaw/openclaw) - the self-hosted AI agent gateway that connects your favorite chat apps to AI coding agents.
+A production-ready Docker setup for AI agent gateways. Supports both:
+
+- **[OpenClaw](https://github.com/openclaw/openclaw)** - The official self-hosted AI agent gateway
+- **[PicoClaw](https://github.com/sipeed/picoclaw)** - Sipeed's lightweight AI agent gateway for embedded devices
 
 ## Features
 
 - **Debian Bookworm (LTS) Base** - Stable and secure foundation
 - **Multi-Architecture Support** - AMD64 and ARM64 builds
+- **Multiple Upstream Support** - Choose between OpenClaw or PicoClaw
 - **Environment Variable Configuration** - Configure everything via `.env` file
 - **Persistent Data Storage** - Config, sessions, skills, plugins, and npm packages survive container restarts
 - **Nginx Reverse Proxy** - Built-in authentication and rate limiting
@@ -38,11 +42,12 @@ nano .env
 ```
 
 At minimum, you need to set:
+- `UPSTREAM=openclaw` or `UPSTREAM=picoclaw` (choose your upstream)
 - One AI provider API key (e.g., `ANTHROPIC_API_KEY`, `KIMI_API_KEY`, `OPENROUTER_API_KEY`)
 - `AUTH_PASSWORD` for web UI protection
 - `OPENCLAW_GATEWAY_TOKEN` for API access
 
-### 3. Start OpenClaw
+### 3. Start the Gateway
 
 ```bash
 docker compose up -d
@@ -54,29 +59,54 @@ Open your browser to `http://localhost:8080` and log in with:
 - Username: `admin` (or your `AUTH_USERNAME`)
 - Password: Your `AUTH_PASSWORD`
 
-## Systemd Service (Optional)
+## Upstream Selection
 
-To manage OpenClaw with systemd on your host:
+This Docker setup supports two upstream projects:
+
+### OpenClaw (Default)
+
+The official self-hosted AI agent gateway that connects your favorite chat apps to AI coding agents.
+
+```env
+UPSTREAM=openclaw
+UPSTREAM_VERSION=main
+```
+
+- **GitHub:** https://github.com/openclaw/openclaw
+- **Documentation:** https://docs.openclaw.ai/
+- **Community:** [Discord](https://discord.gg/openclaw)
+
+### PicoClaw
+
+Sipeed's lightweight AI agent gateway, optimized for embedded devices and resource-constrained environments.
+
+```env
+UPSTREAM=picoclaw
+UPSTREAM_VERSION=main
+```
+
+- **GitHub:** https://github.com/sipeed/picoclaw
+- **Ideal for:** MAIX devices, embedded systems, lightweight deployments
+
+### Switching Between Upstreams
+
+Simply change the `UPSTREAM` variable in your `.env` file:
+
+```env
+# Use OpenClaw
+UPSTREAM=openclaw
+UPSTREAM_VERSION=main
+
+# Or use PicoClaw
+UPSTREAM=picoclaw
+UPSTREAM_VERSION=main
+```
+
+Then restart the container:
 
 ```bash
-# Copy the systemd service file
-sudo cp config/openclaw.service /etc/systemd/system/
-
-# Edit the service file to match your installation path
-sudo nano /etc/systemd/system/openclaw.service
-
-# Reload systemd
-sudo systemctl daemon-reload
-
-# Enable and start the service
-sudo systemctl enable openclaw
-sudo systemctl start openclaw
-
-# Check status
-sudo systemctl status openclaw
-
-# View logs
-sudo journalctl -u openclaw -f
+docker compose down
+docker compose up -d
 ```
 
 ## Configuration
@@ -137,9 +167,9 @@ The following directories are persisted:
 
 | Host Path | Container Path | Contents |
 |-----------|---------------|----------|
-| `/mnt/shuttle/share/app-data/openclaw3` | `/data/.openclaw` | Config, sessions, skills, plugins |
+| `/mnt/shuttle/share/app-data/openclaw3` | `/data/.openclaw` or `/data/.picoclaw` | Config, sessions, skills, plugins |
 | `/mnt/shuttle/share/app-data/openclaw3/workspace` | `/data/workspace` | Agent projects |
-| `./logs` | `/var/log/openclaw` | Application logs |
+| `./logs` | `/var/log/openclaw` or `/var/log/picoclaw` | Application logs |
 
 ### WhatsApp Configuration
 
@@ -152,7 +182,7 @@ WHATSAPP_ALLOW_FROM=+1234567890,+0987654321
 When enabled, scan the QR code in the logs to pair:
 
 ```bash
-docker compose logs -f openclaw
+docker compose logs -f gateway
 ```
 
 ### Telegram Configuration
@@ -206,20 +236,39 @@ curl -X POST http://localhost:8080/hooks/wake \
 
 ## Docker Compose Examples
 
-### Minimal Setup
+### Minimal Setup (OpenClaw)
 
 ```yaml
 services:
-  openclaw:
-    image: ghcr.io/openclaw/openclaw-docker:latest
+  gateway:
+    image: ghcr.io/n00b001/openclaw:latest
     ports:
       - "8080:8080"
     environment:
+      - UPSTREAM=openclaw
       - ANTHROPIC_API_KEY=sk-ant-...
       - AUTH_PASSWORD=secure-password
       - OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
     volumes:
       - ./data:/data/.openclaw
+    restart: unless-stopped
+```
+
+### Minimal Setup (PicoClaw)
+
+```yaml
+services:
+  gateway:
+    image: ghcr.io/n00b001/picoclaw:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - UPSTREAM=picoclaw
+      - ANTHROPIC_API_KEY=sk-ant-...
+      - AUTH_PASSWORD=secure-password
+      - OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+    volumes:
+      - ./data:/data/.picoclaw
     restart: unless-stopped
 ```
 
@@ -236,8 +285,8 @@ See the included [`docker-compose.yml`](docker-compose.yml) for a complete examp
 
 ```yaml
 services:
-  openclaw:
-    image: ghcr.io/openclaw/openclaw-docker:latest
+  gateway:
+    image: ghcr.io/n00b001/${UPSTREAM:-openclaw}:latest
     # ... rest of configuration
 ```
 
@@ -245,16 +294,24 @@ services:
 
 ```yaml
 services:
-  openclaw:
+  gateway:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        OPENCLAW_VERSION: main
+        UPSTREAM: ${UPSTREAM:-openclaw}
+        UPSTREAM_VERSION: ${UPSTREAM_VERSION:-main}
     # ... rest of configuration
 ```
 
 ## Environment Variables Reference
+
+### Upstream Selection
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `UPSTREAM` | Which upstream to use (`openclaw` or `picoclaw`) | `openclaw` |
+| `UPSTREAM_VERSION` | Version/branch to build | `main` |
 
 ### Required
 
@@ -332,7 +389,7 @@ services:
 
 ### Automatic Updates
 
-The image includes an auto-update workflow that checks for new OpenClaw releases daily and rebuilds automatically.
+The image includes an auto-update workflow that checks for new releases daily and rebuilds automatically.
 
 ### Manual Update
 
@@ -344,7 +401,7 @@ docker compose pull
 docker compose up -d
 
 # View logs
-docker compose logs -f
+docker compose logs -f gateway
 ```
 
 ### Update with Data Migration
@@ -368,7 +425,7 @@ docker compose up -d
 
 Check logs:
 ```bash
-docker compose logs -f openclaw
+docker compose logs -f gateway
 ```
 
 Common issues:
@@ -378,25 +435,25 @@ Common issues:
 ### WhatsApp Not Connecting
 
 1. Check that `WHATSAPP_ENABLED=true` is set
-2. View logs to see QR code: `docker compose logs -f openclaw`
+2. View logs to see QR code: `docker compose logs -f gateway`
 3. Scan QR code with WhatsApp mobile app
 
 ### Browser Automation Not Working
 
 1. Ensure browser sidecar is running: `docker compose ps`
 2. Check `BROWSER_CDP_URL=http://browser:9222` is set
-3. Verify network connectivity: `docker compose exec openclaw curl http://browser:9222/json/version`
+3. Verify network connectivity: `docker compose exec gateway curl http://browser:9222/json/version`
 
 ### Permission Issues
 
 If you see permission errors:
 
 ```bash
-# Fix ownership (OpenClaw runs as UID/GID 10000)
+# Fix ownership (Gateway runs as UID/GID 10000)
 sudo chown -R 10000:10000 ./data
 
 # Or run as root (not recommended for production)
-docker compose exec --user root openclaw bash
+docker compose exec --user root gateway bash
 ```
 
 ### Reset Configuration
@@ -430,25 +487,54 @@ docker compose up -d
 git clone https://github.com/openclaw/openclaw-docker.git
 cd openclaw-docker
 
-# Build image
+# Build OpenClaw image
 docker build -t openclaw:local .
 
-# Or build with specific OpenClaw version
-docker build --build-arg OPENCLAW_VERSION=v2026.2.1 -t openclaw:local .
+# Or build PicoClaw image
+docker build --build-arg UPSTREAM=picoclaw -t picoclaw:local .
+
+# Or build with specific version
+docker build --build-arg UPSTREAM=openclaw --build-arg UPSTREAM_VERSION=v2026.2.1 -t openclaw:local .
 ```
+
+## Testing
+
+This project includes a comprehensive test suite using Python and pytest.
+
+### Running Tests
+
+```bash
+# Install dependencies with uv
+uv sync
+
+# Run all tests
+uv run pytest
+
+# Run only unit tests
+uv run pytest tests/unit -v
+
+# Run with coverage
+uv run pytest --cov=lib tests/
+```
+
+### Test Structure
+
+- `tests/unit/` - Unit tests for configuration modules
+- `tests/integration/` - Integration tests for GitHub API and Dockerfile validation
 
 ## CI/CD
 
 This repository includes GitHub Actions workflows for:
 
 - **Docker Build and Push** - Builds and pushes multi-arch images on every push to main
-- **Auto-Update Check** - Daily check for new OpenClaw releases
+- **Auto-Update Check** - Daily check for new releases
 - **Security Scanning** - Trivy vulnerability scanning
 
 Images are published to:
-- `ghcr.io/openclaw/openclaw-docker:latest`
-- `ghcr.io/openclaw/openclaw-docker:<version>`
-- `ghcr.io/openclaw/openclaw-docker:<sha>`
+- `ghcr.io/n00b001/openclaw:latest`
+- `ghcr.io/n00b001/openclaw:<version>`
+- `ghcr.io/n00b001/picoclaw:latest`
+- `ghcr.io/n00b001/picoclaw:<version>`
 
 ## License
 
@@ -490,11 +576,17 @@ The hooks include:
 
 ## Support
 
+### OpenClaw
 - [OpenClaw Documentation](https://docs.openclaw.ai/)
 - [OpenClaw GitHub](https://github.com/openclaw/openclaw)
 - [Discord Community](https://discord.gg/openclaw)
 
+### PicoClaw
+- [PicoClaw GitHub](https://github.com/sipeed/picoclaw)
+- [Sipeed Website](https://www.sipeed.com/)
+
 ## Acknowledgments
 
-- [OpenClaw](https://github.com/openclaw/openclaw) - The amazing AI agent gateway
+- [OpenClaw](https://github.com/openclaw/openclaw) - The official AI agent gateway
+- [PicoClaw](https://github.com/sipeed/picoclaw) - Sipeed's lightweight AI agent gateway
 - [coollabsio/openclaw](https://github.com/coollabsio/openclaw) - Inspiration for Docker setup

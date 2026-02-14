@@ -1,13 +1,18 @@
 #!/bin/bash
 # =============================================================================
-# OpenClaw Docker Smoke Test
+# OpenClaw/PicoClaw Docker Smoke Test
 # =============================================================================
 # This script:
-# 1. Builds the Docker image
+# 1. Builds the Docker image for the specified upstream
 # 2. Starts containers with docker-compose.test.yml
 # 3. Waits for services to be healthy
 # 4. Runs basic health checks
 # 5. Cleans up
+#
+# Usage:
+#   ./smoke-test.sh                     # Test OpenClaw (default)
+#   UPSTREAM=picoclaw ./smoke-test.sh   # Test PicoClaw
+#   IMAGE_TAG=myimage:latest ./smoke-test.sh  # Use pre-built image
 # =============================================================================
 
 set -e
@@ -19,11 +24,15 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Upstream configuration
+UPSTREAM="${UPSTREAM:-openclaw}"
+UPSTREAM_VERSION="${UPSTREAM_VERSION:-main}"
+
 # Test configuration
 COMPOSE_FILE="docker-compose.test.yml"
 TEST_TIMEOUT=120
-SERVICE_NAME="openclaw-test"
-IMAGE_TAG="${IMAGE_TAG:-openclaw:smoke-test}"
+SERVICE_NAME="gateway-test"
+IMAGE_TAG="${IMAGE_TAG:-${UPSTREAM}:smoke-test}"
 
 # Counters
 TESTS_PASSED=0
@@ -34,6 +43,13 @@ log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[PASS]${NC} $1"; }
 log_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
+# Display configuration
+log_info "Smoke Test Configuration:"
+echo "  UPSTREAM: ${UPSTREAM}"
+echo "  UPSTREAM_VERSION: ${UPSTREAM_VERSION}"
+echo "  IMAGE_TAG: ${IMAGE_TAG}"
+echo ""
 
 # Cleanup function
 cleanup() {
@@ -52,12 +68,12 @@ trap cleanup EXIT
 log_info "Test 1: Checking Docker image..."
 
 # If IMAGE_TAG is set (CI environment), verify the image exists and tag it
-if [ "$IMAGE_TAG" != "openclaw:smoke-test" ]; then
+if [ "$IMAGE_TAG" != "${UPSTREAM}:smoke-test" ]; then
     log_info "Using pre-built image: $IMAGE_TAG"
     if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1; then
         log_success "Pre-built image found"
-        # Tag the image as openclaw:smoke-test for docker-compose to use
-        docker tag "$IMAGE_TAG" openclaw:smoke-test
+        # Tag the image for docker-compose to use
+        docker tag "$IMAGE_TAG" "${UPSTREAM}:smoke-test"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_error "Pre-built image not found: $IMAGE_TAG"
@@ -65,11 +81,11 @@ if [ "$IMAGE_TAG" != "openclaw:smoke-test" ]; then
         exit 1
     fi
 # Otherwise, check if image already exists locally
-elif docker image inspect openclaw:smoke-test > /dev/null 2>&1; then
+elif docker image inspect "${UPSTREAM}:smoke-test" > /dev/null 2>&1; then
     log_success "Docker image already exists, skipping build"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 # Build from scratch
-elif docker build -t openclaw:smoke-test . > /tmp/build.log 2>&1; then
+elif docker build --build-arg UPSTREAM="$UPSTREAM" --build-arg UPSTREAM_VERSION="$UPSTREAM_VERSION" -t "${UPSTREAM}:smoke-test" . > /tmp/build.log 2>&1; then
     log_success "Docker image built successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
@@ -93,6 +109,9 @@ if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
     sudo chown -R "$(id -u):$(id -g)" test-data test-workspace 2>/dev/null || true
     sudo chmod -R 755 test-data test-workspace 2>/dev/null || true
 fi
+
+# Export UPSTREAM for docker-compose
+export UPSTREAM
 
 if docker compose -f "$COMPOSE_FILE" up -d > /tmp/compose.log 2>&1; then
     log_success "Services started"
@@ -175,13 +194,13 @@ else
 fi
 
 # =============================================================================
-# Test 5: OpenClaw Gateway Test
+# Test 5: Gateway Test (upstream-aware)
 # =============================================================================
-log_info "Test 5: Testing OpenClaw gateway..."
+log_info "Test 5: Testing ${UPSTREAM} gateway..."
 
-# Check if openclaw gateway is actually responding
-# Run as openclaw user to avoid permission issues
-docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw OPENCLAW_STATE_DIR=/data/.openclaw openclaw gateway status" > /tmp/gateway-status.log 2>&1 || true
+# Check if gateway is actually responding
+# Run as the upstream user to avoid permission issues
+docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1 || true
 
 # Check for specific error conditions
 GATEWAY_ERRORS=0
@@ -215,15 +234,15 @@ else
 fi
 
 if [ $GATEWAY_ERRORS -eq 0 ]; then
-    log_success "OpenClaw gateway is running and responding"
+    log_success "${UPSTREAM} gateway is running and responding"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     log_info "Gateway status output:"
     cat /tmp/gateway-status.log
     log_info "Identity directory contents:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la /data/.openclaw/identity/ 2>/dev/null || log_warn "Identity directory not found"
-    log_info "OpenClaw config:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat /data/.openclaw/openclaw.json 2>/dev/null || log_warn "Config file not found"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "/data/.${UPSTREAM}/identity/" 2>/dev/null || log_warn "Identity directory not found"
+    log_info "Config:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/data/.${UPSTREAM}/${UPSTREAM}.json" 2>/dev/null || log_warn "Config file not found"
 fi
 
 # =============================================================================
@@ -248,7 +267,7 @@ log_info "Test 7: Checking identity directory permissions..."
 IDENTITY_PERMISSIONS=0
 
 # Check if identity directory exists
-if ! docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -d /data/.openclaw/identity 2>/dev/null; then
+if ! docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -d "/data/.${UPSTREAM}/identity" 2>/dev/null; then
     log_error "Identity directory does not exist"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
@@ -257,87 +276,87 @@ else
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
-# Check if identity directory is writable (as openclaw user)
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw test -w /data/.openclaw/identity" 2>/dev/null; then
-    log_success "Identity directory is writable by openclaw user"
+# Check if identity directory is writable (as upstream user)
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} test -w /data/.${UPSTREAM}/identity" 2>/dev/null; then
+    log_success "Identity directory is writable by ${UPSTREAM} user"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "Identity directory is not writable by openclaw user"
+    log_error "Identity directory is not writable by ${UPSTREAM} user"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
 fi
 
-# Try to create a test file in identity directory (as openclaw user)
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw touch /data/.openclaw/identity/test-file" 2>/dev/null; then
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw rm /data/.openclaw/identity/test-file" 2>/dev/null || true
-    log_success "openclaw user can write files in identity directory"
+# Try to create a test file in identity directory (as upstream user)
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} touch /data/.${UPSTREAM}/identity/test-file" 2>/dev/null; then
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} rm /data/.${UPSTREAM}/identity/test-file" 2>/dev/null || true
+    log_success "${UPSTREAM} user can write files in identity directory"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "openclaw user cannot write files in identity directory"
+    log_error "${UPSTREAM} user cannot write files in identity directory"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
 fi
 
 # =============================================================================
-# Test 7: Config Validation
+# Test 8: Config Validation
 # =============================================================================
-log_info "Test 7: Validating OpenClaw config..."
+log_info "Test 8: Validating ${UPSTREAM} config..."
 
 # Check if config file exists and is valid JSON
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" bash -c "cat /data/.openclaw/openclaw.json | python3 -m json.tool > /dev/null 2>&1"; then
-    log_success "OpenClaw config is valid JSON"
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" bash -c "cat /data/.${UPSTREAM}/${UPSTREAM}.json | python3 -m json.tool > /dev/null 2>&1"; then
+    log_success "${UPSTREAM} config is valid JSON"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_warn "OpenClaw config has warnings (may be expected for test environment)"
+    log_warn "${UPSTREAM} config has warnings (may be expected for test environment)"
     # Don't fail on config warnings in smoke test
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
 # =============================================================================
-# Test 8: Checking OpenClaw full status...
+# Test 9: Checking full status...
 # =============================================================================
-log_info "Test 8: Checking OpenClaw full status..."
+log_info "Test 9: Checking ${UPSTREAM} full status..."
 
-# Run as openclaw user to avoid permission issues
-docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw OPENCLAW_STATE_DIR=/data/.openclaw openclaw status" > /tmp/openclaw-status.log 2>&1 || true
+# Run as upstream user to avoid permission issues
+docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1 || true
 
 STATUS_ERRORS=0
 
 # Check for permission denied errors
-if grep -q "EACCES\|permission denied" /tmp/openclaw-status.log 2>/dev/null; then
-    log_error "OpenClaw status shows permission errors"
+if grep -q "EACCES\|permission denied" /tmp/status.log 2>/dev/null; then
+    log_error "${UPSTREAM} status shows permission errors"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     STATUS_ERRORS=$((STATUS_ERRORS + 1))
 fi
 
 # Check if gateway is marked as unreachable
-if grep -q "Gateway.*unreachable" /tmp/openclaw-status.log 2>/dev/null; then
-    log_error "OpenClaw status shows gateway is unreachable"
+if grep -q "Gateway.*unreachable" /tmp/status.log 2>/dev/null; then
+    log_error "${UPSTREAM} status shows gateway is unreachable"
     TESTS_FAILED=$((TESTS_FAILED + 1))
     STATUS_ERRORS=$((STATUS_ERRORS + 1))
 fi
 
 # Check for memory unavailable errors
-if grep -q "Memory.*unavailable" /tmp/openclaw-status.log 2>/dev/null; then
+if grep -q "Memory.*unavailable" /tmp/status.log 2>/dev/null; then
     log_warn "Memory plugin is unavailable (may be expected in test environment)"
     # Don't fail on memory warnings
 fi
 
 if [ $STATUS_ERRORS -eq 0 ]; then
-    log_success "OpenClaw status check passed"
+    log_success "${UPSTREAM} status check passed"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_info "OpenClaw status output:"
-    cat /tmp/openclaw-status.log
+    log_info "${UPSTREAM} status output:"
+    cat /tmp/status.log
 fi
 
 # =============================================================================
-# Test 9: Verify gateway port accessibility
+# Test 10: Verify gateway port accessibility
 # =============================================================================
-log_info "Test 9: Verifying gateway on port 18789..."
+log_info "Test 10: Verifying gateway on port 18789..."
 
 # Test gateway from within container
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - openclaw -c "cd /data && HOME=/data/.openclaw OPENCLAW_STATE_DIR=/data/.openclaw curl -f http://localhost:18789/healthz" 2>&1; then
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} curl -f http://localhost:18789/healthz" 2>&1; then
     log_success "Gateway is accessible on port 18789 (from within container)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
@@ -346,32 +365,11 @@ else
 fi
 
 # Verify gateway status shows correct port
-if grep -q "port=18789" /tmp/openclaw-status.log 2>/dev/null; then
+if grep -q "port=18789" /tmp/status.log 2>/dev/null; then
     log_success "Gateway status shows correct port (18789)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
     log_warn "Gateway status shows unexpected port in status output"
-fi
-
-# Check if gateway is marked as unreachable
-if grep -q "Gateway.*unreachable" /tmp/openclaw-status.log 2>/dev/null; then
-    log_error "OpenClaw status shows gateway is unreachable"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    STATUS_ERRORS=$((STATUS_ERRORS + 1))
-fi
-
-# Check for memory unavailable errors
-if grep -q "Memory.*unavailable" /tmp/openclaw-status.log 2>/dev/null; then
-    log_warn "Memory plugin is unavailable (may be expected in test environment)"
-    # Don't fail on memory warnings
-fi
-
-if [ $STATUS_ERRORS -eq 0 ]; then
-    log_success "OpenClaw status check passed"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-else
-    log_info "OpenClaw status output:"
-    cat /tmp/openclaw-status.log
 fi
 
 # =============================================================================
@@ -381,14 +379,18 @@ echo ""
 echo "========================================"
 echo "Smoke Test Summary"
 echo "========================================"
+echo "Upstream: ${UPSTREAM}"
+echo "Version: ${UPSTREAM_VERSION}"
+echo "Image: ${IMAGE_TAG}"
+echo "----------------------------------------"
 echo -e "Tests Passed: ${GREEN}$TESTS_PASSED${NC}"
 echo -e "Tests Failed: ${RED}$TESTS_FAILED${NC}"
 echo "========================================"
 
 if [ $TESTS_FAILED -eq 0 ]; then
-    log_success "All smoke tests passed!"
+    log_success "All smoke tests passed for ${UPSTREAM}!"
     exit 0
 else
-    log_error "Some smoke tests failed"
+    log_error "Some smoke tests failed for ${UPSTREAM}"
     exit 1
 fi

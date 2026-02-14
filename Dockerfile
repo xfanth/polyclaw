@@ -1,16 +1,29 @@
 # =============================================================================
-# OpenClaw Docker Image - Debian Bookworm (LTS) Based
+# OpenClaw/PicoClaw Docker Image - Debian Bookworm (LTS) Based
 # =============================================================================
-# This Dockerfile builds OpenClaw from source and creates a production-ready
-# image with all necessary components for 24/7 operation.
+# This Dockerfile builds either OpenClaw or PicoClaw from source and creates a
+# production-ready image with all necessary components for 24/7 operation.
+#
+# Build Arguments:
+#   UPSTREAM        - Which upstream to build: "openclaw" or "picoclaw" (default: openclaw)
+#   UPSTREAM_VERSION - Version/branch to build (default: main)
+#
+# Examples:
+#   docker build -t openclaw:latest .
+#   docker build --build-arg UPSTREAM=picoclaw -t picoclaw:latest .
+#   docker build --build-arg UPSTREAM=openclaw --build-arg UPSTREAM_VERSION=v2026.2.1 -t openclaw:v2026.2.1 .
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build OpenClaw from source
+# Stage 1: Build from source
 # -----------------------------------------------------------------------------
 FROM node:25-bookworm AS builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Build arguments for upstream selection
+ARG UPSTREAM=openclaw
+ARG UPSTREAM_VERSION=main
 
 # Install build dependencies
 RUN apt-get update \
@@ -31,21 +44,35 @@ ENV PATH="/root/.bun/bin:${PATH}"
 # Enable corepack for pnpm (install globally first as it's not bundled in node:25)
 RUN npm install -g corepack@0.34.6 --force && corepack enable
 
-# Clone OpenClaw repository
+# Clone the appropriate upstream repository
 WORKDIR /build
-ARG OPENCLAW_VERSION=main
-RUN if [ "${OPENCLAW_VERSION}" = "oc_main" ]; then \
-        git clone --depth 1 --branch main https://github.com/openclaw/openclaw.git .; \
+
+# Determine GitHub owner/repo based on upstream
+ENV GITHUB_OWNER=${UPSTREAM}
+ENV GITHUB_REPO=${UPSTREAM}
+
+# Handle special cases for GitHub owners
+RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
+        export GITHUB_OWNER="sipeed"; \
+        export GITHUB_REPO="picoclaw"; \
+    elif [ "${UPSTREAM}" = "openclaw" ]; then \
+        export GITHUB_OWNER="openclaw"; \
+        export GITHUB_REPO="openclaw"; \
+    fi && \
+    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ]; then \
+        git clone --depth 1 --branch main https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .; \
     else \
-        git clone --depth 1 --branch "${OPENCLAW_VERSION}" https://github.com/openclaw/openclaw.git .; \
+        git clone --depth 1 --branch "${UPSTREAM_VERSION}" https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .; \
     fi
 
-# Patch workspace dependencies for standalone build
-RUN set -eux; \
-    find ./extensions -name 'package.json' -type f | while read -r f; do \
-        sed -i -E 's/"openclaw"[[:space:]]*:[[:space:]]*">=[^"]+"/"openclaw": "*"/g' "$f"; \
-        sed -i -E 's/"openclaw"[[:space:]]*:[[:space:]]*"workspace:[^"]+"/"openclaw": "*"/g' "$f"; \
-    done
+# Patch workspace dependencies for standalone build (only for OpenClaw)
+RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
+        set -eux; \
+        find ./extensions -name 'package.json' -type f 2>/dev/null | while read -r f; do \
+            sed -i -E 's/"openclaw"[[:space:]]*:[[:space:]]*">=[^"]+"/"openclaw": "*"/g' "$f"; \
+            sed -i -E 's/"openclaw"[[:space:]]*:[[:space:]]*"workspace:[^"]+"/"openclaw": "*"/g' "$f"; \
+        done; \
+    fi
 
 # Install dependencies and build
 RUN pnpm install --no-frozen-lockfile && pnpm build
@@ -54,6 +81,10 @@ RUN pnpm install --no-frozen-lockfile && pnpm build
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:install && pnpm ui:build
 
+# Store upstream info for later stages
+RUN echo "${UPSTREAM}" > /tmp/upstream_name && \
+    echo "${UPSTREAM_VERSION}" > /tmp/upstream_version
+
 # -----------------------------------------------------------------------------
 # Stage 2: Production Runtime
 # -----------------------------------------------------------------------------
@@ -61,9 +92,16 @@ FROM node:25-bookworm
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# Build arguments (repeated for this stage)
+ARG UPSTREAM=openclaw
+ARG UPSTREAM_VERSION=main
+
+# Labels with upstream info
 LABEL maintainer="OpenClaw Docker Community"
-LABEL description="OpenClaw - Self-hosted AI agent gateway"
-LABEL org.opencontainers.image.source="https://github.com/openclaw/openclaw"
+LABEL description="${UPSTREAM} - Self-hosted AI agent gateway"
+LABEL org.opencontainers.image.source="https://github.com/${UPSTREAM}/${UPSTREAM}"
+LABEL upstream="${UPSTREAM}"
+LABEL upstream_version="${UPSTREAM_VERSION}"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -145,66 +183,85 @@ RUN ARCH=$(dpkg --print-architecture) \
     && apt-get install -y --no-install-recommends 1password-cli \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for running OpenClaw
+# Create non-root user for running the application
 # Use high UID/GID to avoid conflicts with existing users in base image
-RUN groupadd -r openclaw -g 10000 \
-    && useradd -r -g openclaw -u 10000 -m -s /bin/bash openclaw \
-    && usermod -aG sudo openclaw \
-    && echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw \
-    && chmod 0440 /etc/sudoers.d/openclaw \
+# Username matches the upstream for consistency
+RUN groupadd -r ${UPSTREAM} -g 10000 \
+    && useradd -r -g ${UPSTREAM} -u 10000 -m -s /bin/bash ${UPSTREAM} \
+    && usermod -aG sudo ${UPSTREAM} \
+    && echo "${UPSTREAM} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${UPSTREAM} \
+    && chmod 0440 /etc/sudoers.d/${UPSTREAM} \
     && chmod u+s /bin/ping \
-    && mkdir -p /data/.openclaw/.bun/bin \
-    && ln -sf /root/.bun/bin/bun /data/.openclaw/.bun/bin/bun \
-    && ln -sf /root/.bun/bin/bunx /data/.openclaw/.bun/bin/bunx \
-    && chown -R openclaw:openclaw /data
+    && mkdir -p /data/.${UPSTREAM}/.bun/bin \
+    && ln -sf /root/.bun/bin/bun /data/.${UPSTREAM}/.bun/bin/bun \
+    && ln -sf /root/.bun/bin/bunx /data/.${UPSTREAM}/.bun/bin/bunx \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /data
 
-# Copy OpenClaw from builder
-COPY --from=builder --chown=openclaw:openclaw /build /opt/openclaw/app
+# Copy application from builder
+COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
 # Create symlinks for proper path resolution
-RUN ln -s /opt/openclaw/app/docs /opt/openclaw/docs \
-    && ln -s /opt/openclaw/app/assets /opt/openclaw/assets \
-    && ln -s /opt/openclaw/app/package.json /opt/openclaw/package.json
+RUN ln -s /opt/${UPSTREAM}/app/docs /opt/${UPSTREAM}/docs \
+    && ln -s /opt/${UPSTREAM}/app/assets /opt/${UPSTREAM}/assets \
+    && ln -s /opt/${UPSTREAM}/app/package.json /opt/${UPSTREAM}/package.json
 
-# Create openclaw CLI wrapper
-RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /opt/openclaw/app/openclaw.mjs "$@"' > /usr/local/bin/openclaw.real \
-    && chmod +x /usr/local/bin/openclaw.real
+# Create CLI wrapper using the upstream's entrypoint
+# hadolint ignore=SC2016
+RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
+    '    exec node /opt/picoclaw/app/picoclaw.mjs "$@"' \
+    'else' \
+    '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
+    'fi' > /usr/local/bin/${UPSTREAM}.real \
+    && chmod +x /usr/local/bin/${UPSTREAM}.real
+
+# Create universal CLI wrapper that works regardless of upstream
+RUN printf '%s\n' '#!/usr/bin/env bash' \
+    'if [ -f /opt/openclaw/app/openclaw.mjs ]; then' \
+    '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
+    'elif [ -f /opt/picoclaw/app/picoclaw.mjs ]; then' \
+    '    exec node /opt/picoclaw/app/picoclaw.mjs "$@"' \
+    'else' \
+    '    echo "Error: No upstream application found" >&2' \
+    '    exit 1' \
+    'fi' > /usr/local/bin/upstream.real \
+    && chmod +x /usr/local/bin/upstream.real
 
 # Copy and install the user switching wrapper
-COPY --chown=openclaw:openclaw scripts/openclaw-wrapper.sh /usr/local/bin/openclaw
-RUN chmod +x /usr/local/bin/openclaw
+COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/openclaw-wrapper.sh /usr/local/bin/${UPSTREAM}
+RUN chmod +x /usr/local/bin/${UPSTREAM} \
+    && ln -sf /usr/local/bin/${UPSTREAM} /usr/local/bin/upstream
 
 # Set up directories with proper permissions
-RUN mkdir -p /data/.openclaw /data/workspace /app/config /var/log/openclaw \
-    && chown -R openclaw:openclaw /var/log/openclaw \
-    && chown -R openclaw:openclaw /var/log/nginx
+RUN mkdir -p /data/.${UPSTREAM} /data/workspace /app/config /var/log/${UPSTREAM} \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /var/log/${UPSTREAM} \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /var/log/nginx
 
-# Remove default nginx site and make nginx directories writable by openclaw
+# Remove default nginx site and make nginx directories writable
 RUN rm -f /etc/nginx/sites-enabled/default \
-    && chown -R openclaw:openclaw /etc/nginx/sites-available /etc/nginx/sites-enabled \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /etc/nginx/sites-available /etc/nginx/sites-enabled \
     && chmod 755 /etc/nginx/sites-available /etc/nginx/sites-enabled \
     && touch /etc/nginx/.htpasswd \
-    && chown openclaw:openclaw /etc/nginx/.htpasswd \
+    && chown ${UPSTREAM}:${UPSTREAM} /etc/nginx/.htpasswd \
     && chmod 644 /etc/nginx/.htpasswd \
     && mkdir -p /var/log/nginx \
-    && chown -R openclaw:openclaw /var/log/nginx \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /var/log/nginx \
     && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
-    && chown -R openclaw:openclaw /tmp/nginx \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /tmp/nginx \
     && sed -i 's|pid /run/nginx.pid|pid /tmp/nginx.pid|' /etc/nginx/nginx.conf \
     && sed -i '/^http {/a\    client_body_temp_path /tmp/nginx/client_body;\n    proxy_temp_path /tmp/nginx/proxy;\n    fastcgi_temp_path /tmp/nginx/fastcgi;' /etc/nginx/nginx.conf \
     && mkdir -p /var/log/supervisor \
-    && chown -R openclaw:openclaw /var/log/supervisor \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /var/log/supervisor \
     && mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi \
-    && chown -R openclaw:openclaw /var/lib/nginx
+    && chown -R ${UPSTREAM}:${UPSTREAM} /var/lib/nginx
 
 # Copy scripts and configuration
-COPY --chown=openclaw:openclaw scripts/ /app/scripts/
-COPY --chown=openclaw:openclaw nginx.conf /etc/nginx/sites-available/openclaw
+COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/ /app/scripts/
+COPY --chown=${UPSTREAM}:${UPSTREAM} nginx.conf /etc/nginx/sites-available/${UPSTREAM}
 RUN chmod +x /app/scripts/*.sh \
-    && chmod +x /usr/local/bin/openclaw \
-    && ln -s /etc/nginx/sites-available/openclaw /etc/nginx/sites-enabled/openclaw \
-    && cp /usr/local/bin/openclaw /usr/local/bin/run-as-openclaw \
-    && chmod +x /usr/local/bin/run-as-openclaw
+    && chmod +x /usr/local/bin/${UPSTREAM} \
+    && ln -s /etc/nginx/sites-available/${UPSTREAM} /etc/nginx/sites-enabled/${UPSTREAM} \
+    && cp /usr/local/bin/${UPSTREAM} /usr/local/bin/run-as-${UPSTREAM} \
+    && chmod +x /usr/local/bin/run-as-${UPSTREAM}
 
 # Create health check script
 RUN printf '%s\n' '#!/bin/bash' "curl -f http://localhost:\${PORT:-8080}/healthz || exit 1" > /app/scripts/healthcheck.sh \
@@ -216,18 +273,19 @@ ARG BUILD_DATE=unknown
 ARG IMAGE_VERSION=unknown
 
 # Create version file for debugging
-RUN printf '%s\n' "GIT_COMMIT=${GIT_COMMIT}" "BUILD_DATE=${BUILD_DATE}" "IMAGE_VERSION=${IMAGE_VERSION}" > /app/VERSION \
-    && chown openclaw:openclaw /app/VERSION
+RUN printf '%s\n' "UPSTREAM=${UPSTREAM}" "UPSTREAM_VERSION=${UPSTREAM_VERSION}" "GIT_COMMIT=${GIT_COMMIT}" "BUILD_DATE=${BUILD_DATE}" "IMAGE_VERSION=${IMAGE_VERSION}" > /app/VERSION \
+    && chown ${UPSTREAM}:${UPSTREAM} /app/VERSION
 
 # Environment variable defaults
+ENV UPSTREAM=${UPSTREAM}
 ENV PORT=8080
 ENV OPENCLAW_GATEWAY_PORT=18789
-ENV OPENCLAW_STATE_DIR=/data/.openclaw
+ENV OPENCLAW_STATE_DIR=/data/.${UPSTREAM}
 ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
-ENV OPENCLAW_CONFIG_PATH=/data/.openclaw/openclaw.json
-ENV OPENCLAW_CUSTOM_CONFIG=/app/config/openclaw.json
-ENV HOME=/data/.openclaw
-ENV PATH="/data/.openclaw/.bun/bin:/root/.bun/bin:${PATH}"
+ENV OPENCLAW_CONFIG_PATH=/data/.${UPSTREAM}/${UPSTREAM}.json
+ENV OPENCLAW_CUSTOM_CONFIG=/app/config/${UPSTREAM}.json
+ENV HOME=/data/.${UPSTREAM}
+ENV PATH="/data/.${UPSTREAM}/.bun/bin:/root/.bun/bin:${PATH}"
 
 # Expose ports
 EXPOSE 8080 18789
@@ -237,7 +295,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD /app/scripts/healthcheck.sh
 
 # Note: Container starts as root to fix bind mount permissions,
-# then entrypoint switches to openclaw user
+# then entrypoint switches to the appropriate user
 
 # Set working directory
 WORKDIR /data
