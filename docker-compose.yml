@@ -30,7 +30,7 @@ services:
     #     UPSTREAM_VERSION: ${UPSTREAM_VERSION:-main}
 
     # Or use pre-built image from GitHub Packages (recommended)
-    image: ${OPENCLAW_IMAGE:-ghcr.io/n00b001/${UPSTREAM:-openclaw}:latest}
+    image: ${OPENCLAW_IMAGE:-ghcr.io/xfanth/openclaw:latest}
 
     container_name: ${UPSTREAM:-openclaw}-gateway
     hostname: ${UPSTREAM:-openclaw}
@@ -104,6 +104,7 @@ services:
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
       - OPENCLAW_GATEWAY_BIND=${OPENCLAW_GATEWAY_BIND:-loopback}
+      - OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=${OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS:-10.0.0.0/16}
 
       # ---------------------------------------------------------------------
       # Storage Paths (dynamically set based on upstream)
@@ -279,7 +280,7 @@ services:
   browser:
     # Custom browser image with CDP and noVNC support
     # noVNC viewer available at http://browser:6080/vnc.html
-    image: ${BROWSER_IMAGE:-ghcr.io/n00b001/cdp_vnc_browser:latest}
+    image: ${BROWSER_IMAGE:-ghcr.io/xfanth/cdp_vnc_browser:latest}
 
     container_name: gateway-browser
     hostname: browser

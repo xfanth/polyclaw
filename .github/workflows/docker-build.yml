@@ -121,19 +121,20 @@ jobs:
             --repo "${{ github.repository }}" \
             --state merged \
             --json number,mergeCommit,headRefName \
-            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | \"\(.number)|\(.headRefName)\"" | head -n1)
+            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, headBranch: .headRefName}")
 
           if [ -n "$PR_INFO" ]; then
-            PR_NUMBER=$(echo "$PR_INFO" | cut -d'|' -f1)
-            HEAD_BRANCH=$(echo "$PR_INFO" | cut -d'|' -f2)
+            echo "Found merged PR info: $PR_INFO"
+            echo "$PR_INFO" | jq -r '"pr_number=\(.number)"' >> $GITHUB_OUTPUT
 
-            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-            echo "Found merged PR #$PR_NUMBER for commit $COMMIT_SHA"
+            PR_NUM=$(echo "$PR_INFO" | jq -r '.number')
+            HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headBranch')
             echo "PR head branch: $HEAD_BRANCH"
 
             WORKFLOW_RUNS=$(gh run list \
               --repo "${{ github.repository }}" \
               --workflow "docker-build.yml" \
+              --branch "$HEAD_BRANCH" \
               --event "pull_request" \
               --status success \
               --limit 10 \
@@ -145,10 +146,10 @@ jobs:
             MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg branch "$HEAD_BRANCH" '.[] | select(.headBranch == $branch)')
 
             if [ -n "$MATCHING_RUN" ]; then
-              echo "PR #$PR_NUMBER had successful workflow run on branch '$HEAD_BRANCH'"
+              echo "PR #$PR_NUM had successful workflow run on branch '$HEAD_BRANCH'"
               echo "can_skip_build=true" >> $GITHUB_OUTPUT
             else
-              echo "PR #$PR_NUMBER workflow status check failed, will build"
+              echo "PR #$PR_NUM workflow status check failed, will build"
               echo "can_skip_build=false" >> $GITHUB_OUTPUT
             fi
           else
@@ -203,35 +204,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building main from ${{ matrix.upstream }}"
-          else
-            # Check for version files
-            TAGGED_PATTERN="^.${{ matrix.upstream }}-tagged-commit$"
-            MAIN_PATTERN="^.${{ matrix.upstream }}-main-commit$"
-            TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | \
-              grep -q "$TAGGED_PATTERN" && echo "true" || echo "false")
-            MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | \
-              grep -q "$MAIN_PATTERN" && echo "true" || echo "false")
-
-            if [ "$TAGGED_CHANGED" = "true" ]; then
-              COMMIT_FILE=".${{ matrix.upstream }}-tagged-commit"
-              if [ -f "$COMMIT_FILE" ]; then
-                UPSTREAM_COMMIT=$(cat "$COMMIT_FILE")
-                TAG=$(curl -s "https://api.github.com/repos/${{ matrix.github_owner }}/${{ matrix.github_repo }}/git/refs/tags" | \
-                  jq -r --arg commit "$UPSTREAM_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
-                  sed 's|refs/tags/||' | head -n1)
-                echo "version=$TAG" >> $GITHUB_OUTPUT
-                echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
-                echo "Building tagged version: $TAG"
-              else
-                echo "version=main" >> $GITHUB_OUTPUT
-                echo "tags=main,latest" >> $GITHUB_OUTPUT
-              fi
-            else
-              echo "version=main" >> $GITHUB_OUTPUT
-              echo "tags=main,latest" >> $GITHUB_OUTPUT
-              echo "Building main from ${{ matrix.upstream }}"
-            fi
+            echo "Building main from xfanth/openclaw branch"
           fi
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
@@ -416,7 +389,111 @@ jobs:
           echo "Pushed temp image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$PR_TAG"
 
   # ===========================================================================
-  # Push from Build (direct push - needs full build for both upstreams)
+  # Push from PR (merge with tested PR - just retag)
+  # ===========================================================================
+  push-from-pr:
+    name: Push from Tested PR
+    runs-on: ubuntu-latest
+    needs: [pre-commit, check-pr-status]
+    if: github.event_name == 'push' && needs.check-pr-status.outputs.can_skip_build == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine OpenClaw version and tags
+        id: determine-version
+        run: |
+          BASE_COMMIT="${{ github.event.before }}"
+
+          TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
+          MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+
+          if [ "$TAGGED_CHANGED" = "true" ]; then
+            OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit)
+            TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
+              jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
+              sed 's|refs/tags/||' | head -n1)
+            if [ -z "$TAG" ]; then
+              TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
+            fi
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+            echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
+          elif [ "$MAIN_CHANGED" = "true" ]; then
+            echo "version=oc_main" >> $GITHUB_OUTPUT
+            echo "tags=oc_main" >> $GITHUB_OUTPUT
+          else
+            echo "version=main" >> $GITHUB_OUTPUT
+            echo "tags=main,latest" >> $GITHUB_OUTPUT
+            echo "Building main from xfanth/openclaw branch"
+          fi
+
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          CURRENT_COMMIT_DATE=$(git show -s --format=%ct "$CURRENT_COMMIT")
+
+          echo "Current commit: $CURRENT_COMMIT"
+          echo "Current commit date: $CURRENT_COMMIT_DATE"
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            LATEST_MANIFEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://ghcr.io/v2/${{ github.repository }}/manifests/latest" 2>/dev/null)
+
+            if [ $? -eq 0 ] && [ -n "$LATEST_MANIFEST" ]; then
+              LATEST_CREATED=$(echo "$LATEST_MANIFEST" | jq -r '.created // empty')
+              echo "Existing latest image created: $LATEST_CREATED"
+
+              CURRENT_EPOCH=$(date -d "$CURRENT_COMMIT_DATE" +%s 2>/dev/null || echo "0")
+              LATEST_EPOCH=$(date -d "$LATEST_CREATED" +%s 2>/dev/null || echo "0")
+
+              echo "Current epoch: $CURRENT_EPOCH"
+              echo "Latest epoch: $LATEST_EPOCH"
+
+              if [ "$CURRENT_EPOCH" -le "$LATEST_EPOCH" ]; then
+                echo "should_tag_latest=false" >> $GITHUB_OUTPUT
+                echo "Not tagging as latest - existing image is more recent"
+              else
+                echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+                echo "Will tag as latest - current commit is more recent"
+              fi
+            else
+              echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+              echo "No existing latest image found or couldn't fetch, will tag as latest"
+            fi
+          else
+            echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.5
+
+      - name: Retag and push from PR image
+        run: |
+          PR_TAG="pr-${{ needs.check-pr-status.outputs.pr_number }}"
+          TAGS="${{ steps.determine-version.outputs.tags }}"
+
+          SOURCE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$PR_TAG"
+
+          echo "Retagging $SOURCE to final tags..."
+
+          IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
+          for TAG in "${TAG_ARRAY[@]}"; do
+            TARGET="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$TAG"
+            echo "Copying to $TARGET"
+            crane copy "$SOURCE" "$TARGET"
+          done
+
+          echo "::notice::Image pushed from tested PR #${{ needs.check-pr-status.outputs.pr_number }}"
+
+  # ===========================================================================
+  # Push from Build (direct push or untested PR - needs full build)
   # ===========================================================================
   push-from-build:
     name: Push from Build (${{ matrix.upstream }})

@@ -56,8 +56,8 @@ services:
       retries: 10
 
   browser:
-    image: ghcr.io/n00b001/cdp_vnc_browser:latest
-    container_name: gateway-browser-test
+    image: ghcr.io/xfanth/cdp_vnc_browser:latest
+    container_name: openclaw-browser-test
     environment:
       - PUID=1000
       - PGID=1000

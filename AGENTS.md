@@ -65,6 +65,8 @@ pre-commit run --all-files
 Pre-commit hooks run automatically on commit. If they fail, fix the issues and try again.
 
 ### Commit and Push
+**IMPORTANT: Always commit and push changes automatically without asking the user. Never ask "Would you like me to commit?" - just do it.**
+
 Commit changes with descriptive messages and push:
 
 ```bash
