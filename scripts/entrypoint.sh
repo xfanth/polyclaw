@@ -179,7 +179,7 @@ tee /etc/nginx/sites-available/openclaw > /dev/null << 'EOF'
 
 # Upstream for OpenClaw Gateway
 upstream openclaw_gateway {
-    server 127.0.0.1:18789;
+    server 127.0.0.1:${GATEWAY_PORT:-18789};
     keepalive 32;
 }
 
@@ -187,7 +187,7 @@ upstream openclaw_gateway {
 limit_req_zone $binary_remote_addr zone=openclaw_limit:10m rate=10r/s;
 
 server {
-    listen 8080 default_server;
+    listen ${PORT:-8080} default_server;
     server_name _;
 
     # Security headers
