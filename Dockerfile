@@ -47,22 +47,19 @@ RUN npm install -g corepack@0.34.6 --force && corepack enable
 # Clone the appropriate upstream repository
 WORKDIR /build
 
-# Determine GitHub owner/repo based on upstream
-ENV GITHUB_OWNER=${UPSTREAM}
-ENV GITHUB_REPO=${UPSTREAM}
-
-# Handle special cases for GitHub owners
-RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
-        export GITHUB_OWNER="sipeed"; \
-        export GITHUB_REPO="picoclaw"; \
-    elif [ "${UPSTREAM}" = "openclaw" ]; then \
-        export GITHUB_OWNER="openclaw"; \
-        export GITHUB_REPO="openclaw"; \
+# Clone based on upstream type and version
+RUN set -eux && \
+    if [ "${UPSTREAM}" = "picoclaw" ]; then \
+        GITHUB_OWNER="sipeed"; \
+        GITHUB_REPO="picoclaw"; \
+    else \
+        GITHUB_OWNER="openclaw"; \
+        GITHUB_REPO="openclaw"; \
     fi && \
     if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ]; then \
-        git clone --depth 1 --branch main https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .; \
+        git clone --depth 1 --branch main "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
     else \
-        git clone --depth 1 --branch "${UPSTREAM_VERSION}" https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .; \
+        git clone --depth 1 --branch "${UPSTREAM_VERSION}" "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
     fi
 
 # Patch workspace dependencies for standalone build (only for OpenClaw)
