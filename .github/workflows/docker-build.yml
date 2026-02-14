@@ -110,6 +110,7 @@ jobs:
             WORKFLOW_RUNS=$(gh run list \
               --repo "${{ github.repository }}" \
               --workflow "docker-build.yml" \
+              --branch "$HEAD_BRANCH" \
               --event "pull_request" \
               --status success \
               --limit 10 \
@@ -192,7 +193,7 @@ jobs:
           else
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building main from n00b001/openclaw branch"
+            echo "Building main from xfanth/openclaw branch"
           fi
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
@@ -433,7 +434,7 @@ jobs:
           else
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building main from n00b001/openclaw branch"
+            echo "Building main from xfanth/openclaw branch"
           fi
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
@@ -479,7 +480,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install crane
-        uses: imjasonh/setup-crane@v0
+        uses: imjasonh/setup-crane@v0.2
 
       - name: Retag and push from PR image
         run: |

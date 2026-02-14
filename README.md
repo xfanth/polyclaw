@@ -1,8 +1,8 @@
 # OpenClaw Docker
 
-[![CodeQL](https://github.com/n00b001/openclaw/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/github-code-scanning/codeql)
-[![Docker Build and Push](https://github.com/n00b001/openclaw/actions/workflows/docker-build.yml/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/docker-build.yml)
-[![Pre-Commit Checks](https://github.com/n00b001/openclaw/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/n00b001/openclaw/actions/workflows/pre-commit.yml)
+[![CodeQL](https://github.com/xfanth/openclaw/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/xfanth/openclaw/actions/workflows/github-code-scanning/codeql)
+[![Docker Build and Push](https://github.com/xfanth/openclaw/actions/workflows/docker-build.yml/badge.svg)](https://github.com/xfanth/openclaw/actions/workflows/docker-build.yml)
+[![Pre-Commit Checks](https://github.com/xfanth/openclaw/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/xfanth/openclaw/actions/workflows/pre-commit.yml)
 [![Docker Build](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml/badge.svg)](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://ghcr.io/openclaw/openclaw-docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -184,7 +184,7 @@ Access the browser desktop via noVNC at `http://localhost:8080/browser/`
 **Note:** The browser sidecar must provide noVNC on port `6080`. The `/browser/` route proxies to `browser:6080/vnc.html`.
 
 Example browser image that includes noVNC on port 6080:
-- `ghcr.io/n00b001/chrome-container:latest`
+- `ghcr.io/xfanth/chrome-container:latest`
 
 When using a custom browser image, ensure it exposes noVNC on port 6080.
 

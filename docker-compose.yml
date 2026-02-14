@@ -25,7 +25,7 @@ services:
     #     OPENCLAW_VERSION: main
 
     # Or use pre-built image from GitHub Packages (recommended)
-    image: ${OPENCLAW_IMAGE:-ghcr.io/n00b001/openclaw:latest}
+    image: ${OPENCLAW_IMAGE:-ghcr.io/xfanth/openclaw:latest}
 
     container_name: openclaw-gateway
     hostname: openclaw
@@ -268,7 +268,7 @@ services:
   browser:
     # Custom browser image with CDP and noVNC support
     # noVNC viewer available at http://browser:6080/vnc.html
-    image: ${BROWSER_IMAGE:-ghcr.io/n00b001/cdp_vnc_browser:latest}
+    image: ${BROWSER_IMAGE:-ghcr.io/xfanth/cdp_vnc_browser:latest}
 
     container_name: openclaw-browser
     hostname: browser
