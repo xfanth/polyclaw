@@ -9,7 +9,6 @@ services:
       dockerfile: Dockerfile
     image: openclaw:smoke-test
     container_name: openclaw-smoke-test
-    user: openclaw
     environment:
       - OPENCLAW_GATEWAY_TOKEN=test-token-smoke-test
       - OPENROUTER_API_KEY=sk-or-test-key
