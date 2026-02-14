@@ -3,6 +3,10 @@
 # =============================================================================
 # This workflow automatically rebuilds the Docker image when OpenClaw
 # releases a new version or when main branch updates.
+#
+# REQUIREMENT: Set WORKFLOW_TOKEN secret with 'repo' and 'workflow' scopes
+# to trigger docker-build.yml on created PRs. Create at:
+# https://github.com/settings/tokens/new
 # =============================================================================
 
 name: Auto-Update Check
@@ -128,7 +132,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.WORKFLOW_TOKEN }}
 
       # -----------------------------------------------------------------------
       # Update version files and create PR
@@ -141,6 +145,7 @@ jobs:
       - name: Create Pull Request for Tagged Version
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/${{ needs.check-update.outputs.tagged_version }}
           title: "chore: update OpenClaw to ${{ needs.check-update.outputs.tagged_version }}"
           body: |
@@ -195,7 +200,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.WORKFLOW_TOKEN }}
 
       # -----------------------------------------------------------------------
       # Update main commit file and create PR
@@ -208,6 +213,7 @@ jobs:
       - name: Create Pull Request for Main Branch
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
           branch: auto-update/oc_main-${{ needs.check-update.outputs.main_commit }}
           title: "chore: update OpenClaw to latest main"
           body: |
