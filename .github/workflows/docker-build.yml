@@ -479,23 +479,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install crane
-        uses: imjasonh/setup-crane@v0.5
-
-      - name: Retag and push from PR image
+      - name: Pull and push from PR image
         run: |
           PR_TAG="pr-${{ needs.check-pr-status.outputs.pr_number }}"
           TAGS="${{ steps.determine-version.outputs.tags }}"
 
           SOURCE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$PR_TAG"
 
-          echo "Retagging $SOURCE to final tags..."
+          echo "Pulling $SOURCE..."
+
+          docker pull "$SOURCE"
+
+          echo "Pushing to final tags..."
 
           IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
           for TAG in "${TAG_ARRAY[@]}"; do
             TARGET="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$TAG"
-            echo "Copying to $TARGET"
-            crane copy "$SOURCE" "$TARGET"
+            echo "Tagging and pushing $TARGET"
+            docker tag "$SOURCE" "$TARGET"
+            docker push "$TARGET"
           done
 
           echo "::notice::Image pushed from tested PR #${{ needs.check-pr-status.outputs.pr_number }}"
