@@ -174,20 +174,20 @@ node /app/scripts/configure.js
 log_info "Configuring Nginx..."
 
 # Generate nginx configuration
-tee /etc/nginx/sites-available/openclaw > /dev/null << 'EOF'
+tee /etc/nginx/sites-available/openclaw > /dev/null << EOF
 # OpenClaw Nginx Configuration
 
 # Upstream for OpenClaw Gateway
 upstream openclaw_gateway {
-    server 127.0.0.1:18789;
+    server 127.0.0.1:$GATEWAY_PORT;
     keepalive 32;
 }
 
 # Rate limiting zone
-limit_req_zone $binary_remote_addr zone=openclaw_limit:10m rate=10r/s;
+limit_req_zone \$binary_remote_addr zone=openclaw_limit:10m rate=10r/s;
 
 server {
-    listen 8080 default_server;
+    listen $PORT default_server;
     server_name _;
 
     # Security headers
@@ -208,10 +208,10 @@ server {
     location /healthz {
         proxy_pass http://openclaw_gateway;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
         access_log off;
     }
 
@@ -219,13 +219,13 @@ server {
     location /hooks {
         proxy_pass http://openclaw_gateway;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
 
         # WebSocket support for hooks
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
     }
 
@@ -240,13 +240,13 @@ server {
 
         proxy_pass http://openclaw_gateway;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
 
         # WebSocket support
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
 
         # Buffer settings
@@ -259,13 +259,13 @@ server {
     location /browser/ {
         proxy_pass http://browser:6080/vnc.html;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
 
         # WebSocket support for noVNC
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
 
         # Timeouts for long-lived VNC sessions
@@ -281,13 +281,13 @@ server {
     location /websockify {
         proxy_pass http://browser:6080/websockify;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
 
         # WebSocket support
-        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
 
         # Timeouts for long-lived connections
