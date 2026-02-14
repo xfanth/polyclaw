@@ -140,7 +140,6 @@ jobs:
       - name: Update tagged version files
         run: |
           echo "${{ needs.check-update.outputs.tagged_commit }}" > .openclaw-tagged-commit
-          echo "${{ needs.check-update.outputs.tagged_version }}" > .openclaw-version
 
       - name: Create Pull Request for Tagged Version
         uses: peter-evans/create-pull-request@v7
@@ -165,6 +164,7 @@ jobs:
             ### Docker Images
             Once this PR is merged and the build completes, the following image will be available:
             - `ghcr.io/${{ github.repository }}:${{ needs.check-update.outputs.tagged_version }}`
+            - `ghcr.io/${{ github.repository }}:latest`
 
             ### Verification
             The Docker build workflow will automatically run on this PR, including:
@@ -208,7 +208,6 @@ jobs:
       - name: Update main commit file
         run: |
           echo "${{ needs.check-update.outputs.main_commit }}" > .openclaw-main-commit
-          echo "oc_main" > .openclaw-version
 
       - name: Create Pull Request for Main Branch
         uses: peter-evans/create-pull-request@v7
@@ -229,7 +228,7 @@ jobs:
 
             ### Docker Images
             Once this PR is merged and the build completes, the following image will be available:
-            - `ghcr.io/${{ github.repository }}:oc_main`
+            - `ghcr.io/${{ github.repository }}:oc_main` (from openclaw/openclaw main branch)
 
             ### Verification
             The Docker build workflow will automatically run on this PR, including:

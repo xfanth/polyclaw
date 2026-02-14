@@ -2,8 +2,14 @@
 # OpenClaw Docker Build and Push Workflow
 # =============================================================================
 # This workflow builds and pushes Docker images to GitHub Container Registry
-# (ghcr.io) on every push to main and on new tags.
+# (ghcr.io) on every push to main and on pull requests.
 # Order: pre-commit → build (test/scan run on both PR and push) → push
+#
+# Version channels:
+# - <tag> (e.g., v1.0.0): from openclaw/openclaw tagged release
+# - oc_main: from openclaw/openclaw main branch
+# - main: from n00b001/openclaw main branch (includes upstream changes)
+# - latest: most recent <tag> or main build
 # =============================================================================
 
 name: Docker Build and Push
@@ -13,9 +19,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
-      - '[0-9]+.[0-9]+'
 
   # Build on pull requests
   pull_request:
@@ -25,9 +28,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  OPENCLAW_VERSION: ${{ github.event.inputs.version || 'main' }}
 
-# Allow being called by other workflows (manual-release.yml)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -83,12 +84,105 @@ jobs:
     needs: pre-commit
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
+      openclaw_version: ${{ steps.determine-version.outputs.version }}
+      image_tags: ${{ steps.determine-version.outputs.tags }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Determine OpenClaw version and tags
+        id: determine-version
+        run: |
+          # Get base commit (previous commit on main)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_COMMIT="${{ github.event.pull_request.base.sha }}"
+          else
+            # For push events, compare with HEAD^
+            BASE_COMMIT="${{ github.event.before }}"
+          fi
+
+          echo "Base commit: $BASE_COMMIT"
+
+          # Check which tracking files changed
+          TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
+          MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+
+          echo "Tagged changed: $TAGGED_CHANGED"
+          echo "Main changed: $MAIN_CHANGED"
+
+          # Determine version and tags based on what changed
+          if [ "$TAGGED_CHANGED" = "true" ]; then
+            # Get the tag from the commit
+            OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit)
+            echo "Getting tag for commit: $OPENCLAW_COMMIT"
+
+            # Get all tags from OpenClaw repo and find which one points to this commit
+            TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
+              jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
+              sed 's|refs/tags/||' | head -n1)
+
+            if [ -z "$TAG" ]; then
+              # Fallback: try getting the latest release
+              TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
+            fi
+
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+            echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
+            echo "Building tagged version: $TAG (from openclaw/openclaw)"
+          elif [ "$MAIN_CHANGED" = "true" ]; then
+            OPENCLAW_COMMIT=$(cat .openclaw-main-commit)
+            echo "version=oc_main" >> $GITHUB_OUTPUT
+            echo "tags=oc_main" >> $GITHUB_OUTPUT
+            echo "Building oc_main from commit: $OPENCLAW_COMMIT (from openclaw/openclaw main)"
+          else
+            # Default: build from n00b001/openclaw main branch (includes any upstream changes)
+            echo "version=main" >> $GITHUB_OUTPUT
+            echo "tags=main,latest" >> $GITHUB_OUTPUT
+            echo "Building main from n00b001/openclaw branch"
+          fi
+
+          echo "Base commit: $BASE_COMMIT"
+
+          # Check which tracking files changed
+          TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
+          MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+
+          echo "Tagged changed: $TAGGED_CHANGED"
+          echo "Main changed: $MAIN_CHANGED"
+
+          # Determine version and tags
+          if [ "$TAGGED_CHANGED" = "true" ]; then
+            # Get the tag from the commit
+            OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit)
+            echo "Getting tag for commit: $OPENCLAW_COMMIT"
+
+            # Get all tags from OpenClaw repo and find which one points to this commit
+            TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
+              jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
+              sed 's|refs/tags/||' | head -n1)
+
+            if [ -z "$TAG" ]; then
+              # Fallback: try getting the latest release
+              TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
+            fi
+
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+            echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
+            echo "Building tagged version: $TAG (will also tag as latest)"
+          elif [ "$MAIN_CHANGED" = "true" ]; then
+            OPENCLAW_COMMIT=$(cat .openclaw-main-commit)
+            echo "version=oc_main" >> $GITHUB_OUTPUT
+            echo "tags=oc_main" >> $GITHUB_OUTPUT
+            echo "Building oc_main from commit: $OPENCLAW_COMMIT"
+          else
+            # Default: build from n00b001/openclaw main branch (includes any upstream changes)
+            echo "version=main" >> $GITHUB_OUTPUT
+            echo "tags=main,latest" >> $GITHUB_OUTPUT
+            echo "Building n00b001/openclaw main branch"
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -104,14 +198,15 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{ env.OPENCLAW_VERSION }}
+            type=raw,value=${{ steps.determine-version.outputs.version }}
+            type=raw,value=latest,enable=${{ steps.determine-version.outputs.version != 'oc_main' }}
             type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest,enable={{is_default_branch }}
           labels: |
             org.opencontainers.image.title=OpenClaw
             org.opencontainers.image.description=Self-hosted AI agent gateway
             org.opencontainers.image.vendor=OpenClaw Community
             org.opencontainers.image.licenses=MIT
+            openclaw.version=${{ steps.determine-version.outputs.version }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -124,7 +219,7 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
+            OPENCLAW_VERSION=${{ steps.determine-version.outputs.openclaw_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/docker-image.tar
@@ -230,6 +325,51 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Determine OpenClaw version and tags
+        id: determine-version
+        run: |
+          # Get the previous commit
+          BASE_COMMIT="${{ github.event.before }}"
+          echo "Base commit: $BASE_COMMIT"
+
+          # Check which tracking files changed
+          TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
+          MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+
+          echo "Tagged changed: $TAGGED_CHANGED"
+          echo "Main changed: $MAIN_CHANGED"
+
+          # Determine version and tags based on what changed
+          if [ "$TAGGED_CHANGED" = "true" ]; then
+            # Get the tag from the commit
+            OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit)
+            echo "Getting tag for commit: $OPENCLAW_COMMIT"
+
+            # Get all tags from OpenClaw repo and find which one points to this commit
+            TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
+              jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
+              sed 's|refs/tags/||' | head -n1)
+
+            if [ -z "$TAG" ]; then
+              # Fallback: try getting the latest release
+              TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
+            fi
+
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+            echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
+            echo "Building tagged version: $TAG (from openclaw/openclaw)"
+          elif [ "$MAIN_CHANGED" = "true" ]; then
+            OPENCLAW_COMMIT=$(cat .openclaw-main-commit)
+            echo "version=oc_main" >> $GITHUB_OUTPUT
+            echo "tags=oc_main" >> $GITHUB_OUTPUT
+            echo "Building oc_main from commit: $OPENCLAW_COMMIT (from openclaw/openclaw main)"
+          else
+            # Default: build from n00b001/openclaw main branch (includes any upstream changes)
+            echo "version=main" >> $GITHUB_OUTPUT
+            echo "tags=main,latest" >> $GITHUB_OUTPUT
+            echo "Building main from n00b001/openclaw branch"
+          fi
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -250,9 +390,9 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{ env.OPENCLAW_VERSION }}
+            type=raw,value=${{ steps.determine-version.outputs.version }}
+            type=raw,value=latest,enable=${{ steps.determine-version.outputs.version != 'oc_main' }}
             type=sha,prefix=,suffix=,format=short
-            type=raw,value=latest,enable={{is_default_branch }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -264,6 +404,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            OPENCLAW_VERSION=${{ env.OPENCLAW_VERSION }}
+            OPENCLAW_VERSION=${{ steps.determine-version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
