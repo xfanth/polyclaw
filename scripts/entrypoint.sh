@@ -55,6 +55,15 @@ GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 PORT="${PORT:-8080}"
 
 log_info "Starting OpenClaw Docker Container"
+
+# Log version info if available
+if [ -f /app/VERSION ]; then
+    log_info "Image version info:"
+    while IFS= read -r line; do
+        log_info "  $line"
+    done < /app/VERSION
+fi
+
 log_info "State dir: $STATE_DIR"
 log_info "Workspace dir: $WORKSPACE_DIR"
 log_info "Gateway port: $GATEWAY_PORT"
