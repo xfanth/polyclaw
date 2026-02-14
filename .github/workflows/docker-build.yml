@@ -118,12 +118,12 @@ jobs:
             org.opencontainers.image.vendor=OpenClaw Community
             org.opencontainers.image.licenses=MIT
 
-      - name: Build Docker image
+      - name: Build Docker image (single-platform for testing)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: false
           load: true
           tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
