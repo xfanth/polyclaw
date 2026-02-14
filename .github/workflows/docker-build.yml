@@ -93,28 +93,30 @@ jobs:
 
           echo "commit_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
 
-          PR_NUMBER=$(gh pr list \
+          PR_INFO=$(gh pr list \
             --repo "${{ github.repository }}" \
             --state merged \
-            --json number,mergeCommit \
-            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | .number" | head -n1)
+            --json number,mergeCommit,headRefName \
+            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, headBranch: .headRefName}")
 
-          if [ -n "$PR_NUMBER" ]; then
+          if [ -n "$PR_INFO" ]; then
+            PR_NUMBER=$(echo "$PR_INFO" | jq -r '.number')
+            PR_HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headBranch')
+
             echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-            echo "Found merged PR #$PR_NUMBER for commit $COMMIT_SHA"
+            echo "Found merged PR #$PR_NUMBER for commit $COMMIT_SHA (branch: $PR_HEAD_BRANCH)"
 
-            WORKFLOW_RUNS=$(gh run list \
+            WORKFLOW_RUN=$(gh run list \
               --repo "${{ github.repository }}" \
               --workflow "docker-build.yml" \
+              --branch "$PR_HEAD_BRANCH" \
               --event "pull_request" \
               --status success \
-              --limit 5 \
-              --json headBranch,status,conclusion,displayTitle)
+              --limit 1 \
+              --json status,conclusion)
 
-            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg pr "$PR_NUMBER" '.[] | select(.headBranch | test("pull/request|pull/\($pr)"))')
-
-            if [ -n "$MATCHING_RUN" ]; then
-              echo "PR #$PR_NUMBER had successful workflow run"
+            if [ -n "$WORKFLOW_RUN" ] && [ "$(echo "$WORKFLOW_RUN" | jq -r '.[0].status')" = "completed" ]; then
+              echo "PR #$PR_NUMBER had successful workflow run on branch $PR_HEAD_BRANCH"
               echo "can_skip_build=true" >> $GITHUB_OUTPUT
             else
               echo "PR #$PR_NUMBER workflow status check failed, will build"
@@ -469,7 +471,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install crane
-        uses: imjasonh/setup-crane@v0
+        uses: imjasonh/setup-crane@v0.2
 
       - name: Retag and push from PR image
         run: |
