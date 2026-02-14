@@ -176,16 +176,51 @@ jobs:
 
             echo "version=$TAG" >> $GITHUB_OUTPUT
             echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
-            echo "Building tagged version: $TAG"
+            echo "Building tagged version: $TAG (from openclaw/openclaw)"
           elif [ "$MAIN_CHANGED" = "true" ]; then
             OPENCLAW_COMMIT=$(cat .openclaw-main-commit)
             echo "version=oc_main" >> $GITHUB_OUTPUT
             echo "tags=oc_main" >> $GITHUB_OUTPUT
-            echo "Building oc_main from commit: $OPENCLAW_COMMIT"
+            echo "Building oc_main from commit: $OPENCLAW_COMMIT (from openclaw/openclaw main)"
           else
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
             echo "Building main from n00b001/openclaw branch"
+          fi
+
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          CURRENT_COMMIT_DATE=$(git show -s --format=%ct "$CURRENT_COMMIT")
+
+          echo "Current commit: $CURRENT_COMMIT"
+          echo "Current commit date: $CURRENT_COMMIT_DATE"
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            LATEST_MANIFEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://ghcr.io/v2/${{ github.repository }}/manifests/latest" 2>/dev/null)
+
+            if [ $? -eq 0 ] && [ -n "$LATEST_MANIFEST" ]; then
+              LATEST_CREATED=$(echo "$LATEST_MANIFEST" | jq -r '.created // empty')
+              echo "Existing latest image created: $LATEST_CREATED"
+
+              CURRENT_EPOCH=$(date -d "$CURRENT_COMMIT_DATE" +%s 2>/dev/null || echo "0")
+              LATEST_EPOCH=$(date -d "$LATEST_CREATED" +%s 2>/dev/null || echo "0")
+
+              echo "Current epoch: $CURRENT_EPOCH"
+              echo "Latest epoch: $LATEST_EPOCH"
+
+              if [ "$CURRENT_EPOCH" -le "$LATEST_EPOCH" ]; then
+                echo "should_tag_latest=false" >> $GITHUB_OUTPUT
+                echo "Not tagging as latest - existing image is more recent"
+              else
+                echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+                echo "Will tag as latest - current commit is more recent"
+              fi
+            else
+              echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+              echo "No existing latest image found or couldn't fetch, will tag as latest"
+            fi
+          else
+            echo "should_tag_latest=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up QEMU
@@ -203,7 +238,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=raw,value=${{ steps.determine-version.outputs.version }}
-            type=raw,value=latest,enable=${{ steps.determine-version.outputs.version != 'oc_main' }}
+            type=raw,value=latest,enable=${{ steps.determine-version.outputs.should_tag_latest == 'true' }}
             type=sha,prefix=,suffix=,format=short
           labels: |
             org.opencontainers.image.title=OpenClaw
@@ -388,6 +423,42 @@ jobs:
           else
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
+            echo "Building main from n00b001/openclaw branch"
+          fi
+
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          CURRENT_COMMIT_DATE=$(git show -s --format=%ct "$CURRENT_COMMIT")
+
+          echo "Current commit: $CURRENT_COMMIT"
+          echo "Current commit date: $CURRENT_COMMIT_DATE"
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            LATEST_MANIFEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://ghcr.io/v2/${{ github.repository }}/manifests/latest" 2>/dev/null)
+
+            if [ $? -eq 0 ] && [ -n "$LATEST_MANIFEST" ]; then
+              LATEST_CREATED=$(echo "$LATEST_MANIFEST" | jq -r '.created // empty')
+              echo "Existing latest image created: $LATEST_CREATED"
+
+              CURRENT_EPOCH=$(date -d "$CURRENT_COMMIT_DATE" +%s 2>/dev/null || echo "0")
+              LATEST_EPOCH=$(date -d "$LATEST_CREATED" +%s 2>/dev/null || echo "0")
+
+              echo "Current epoch: $CURRENT_EPOCH"
+              echo "Latest epoch: $LATEST_EPOCH"
+
+              if [ "$CURRENT_EPOCH" -le "$LATEST_EPOCH" ]; then
+                echo "should_tag_latest=false" >> $GITHUB_OUTPUT
+                echo "Not tagging as latest - existing image is more recent"
+              else
+                echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+                echo "Will tag as latest - current commit is more recent"
+              fi
+            else
+              echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+              echo "No existing latest image found or couldn't fetch, will tag as latest"
+            fi
+          else
+            echo "should_tag_latest=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Log in to GitHub Container Registry

@@ -164,7 +164,7 @@ jobs:
             ### Docker Images
             Once this PR is merged and the build completes, the following image will be available:
             - `ghcr.io/${{ github.repository }}:${{ needs.check-update.outputs.tagged_version }}`
-            - `ghcr.io/${{ github.repository }}:latest`
+            - `ghcr.io/${{ github.repository }}:latest` (only if more recent than existing latest tag)
 
             ### Verification
             The Docker build workflow will automatically run on this PR, including:
