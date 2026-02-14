@@ -80,3 +80,4 @@ git branch -d feature/description-of-change
 - Configuration is managed through `.env` files
 - Use `make help` to see available commands
 - The Makefile contains many common operations
+- **Docker image builds are done by GitHub Actions** - do not build locally

@@ -43,7 +43,7 @@ if [ "$(id -u)" = "0" ]; then
 
     # Re-run this script as openclaw user
     log_info "Switching to openclaw user..."
-    exec su -s /bin/bash openclaw -c "cd /data && OPENCLAW_STATE_DIR='$OPENCLAW_STATE_DIR' OPENCLAW_WORKSPACE_DIR='$OPENCLAW_WORKSPACE_DIR' OPENCLAW_GATEWAY_PORT='$OPENCLAW_GATEWAY_PORT' PORT='$PORT' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' /app/scripts/entrypoint.sh"
+    exec su -s /bin/bash --whitelist-environment=OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_GATEWAY_PORT,PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD openclaw -c 'cd /data && /app/scripts/entrypoint.sh'
 fi
 
 # =============================================================================
