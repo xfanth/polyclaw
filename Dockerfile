@@ -28,8 +28,8 @@ RUN apt-get update \
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
-# Enable corepack for pnpm
-RUN corepack enable
+# Enable corepack for pnpm (install globally first as it's not bundled in node:25)
+RUN npm install -g corepack@0.34.6 --force && corepack enable
 
 # Clone OpenClaw repository
 WORKDIR /build
@@ -122,8 +122,8 @@ RUN curl -fsSL https://bun.sh/install | bash \
     && ln -sf /root/.bun/bin/bun /usr/local/bin/bun \
     && ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
 
-# Install npm via Node.js (node is already installed via node:22-bookworm base) and enable corepack for pnpm and yarn
-RUN npm install -g npm@latest && corepack enable
+# Install npm via Node.js and enable corepack for pnpm and yarn
+RUN npm install -g npm@11.10.0 && npm install -g corepack@0.34.6 --force && corepack enable
 
 # Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
