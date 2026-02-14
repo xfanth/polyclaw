@@ -210,6 +210,15 @@ RUN chmod +x /app/scripts/*.sh \
 RUN printf '%s\n' '#!/bin/bash' "curl -f http://localhost:\${PORT:-8080}/healthz || exit 1" > /app/scripts/healthcheck.sh \
     && chmod +x /app/scripts/healthcheck.sh
 
+# Build arguments for version info
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG IMAGE_VERSION=unknown
+
+# Create version file for debugging
+RUN printf '%s\n' "GIT_COMMIT=${GIT_COMMIT}" "BUILD_DATE=${BUILD_DATE}" "IMAGE_VERSION=${IMAGE_VERSION}" > /app/VERSION \
+    && chown openclaw:openclaw /app/VERSION
+
 # Environment variable defaults
 ENV PORT=8080
 ENV OPENCLAW_GATEWAY_PORT=18789
