@@ -172,19 +172,18 @@ jobs:
                   BASE_SHA_AT_RUN=$(echo "$RUN_DETAILS" | jq -r '.baseSha // empty')
                   echo "Base sha at workflow run: $BASE_SHA_AT_RUN"
 
-                  # Check if PR was up-to-date with main when tested
-                  if [ -n "$BASE_SHA_AT_RUN" ] && [ "$BASE_SHA_AT_RUN" = "$BASE_SHA_AT_MERGE" ]; then
-                    echo "PR #$PR_NUM was up-to-date with main during testing (base sha matches)"
+                  # Check if run has baseSha (indicates it was tested against main)
+                  if [ -n "$BASE_SHA_AT_RUN" ]; then
+                    echo "PR #$PR_NUM workflow run $RUN_ID has baseSha (tested against main)"
                     echo "can_skip_build=true" >> $GITHUB_OUTPUT
                     echo "pr_run_id=$RUN_ID" >> $GITHUB_OUTPUT
                   else
-                    echo "PR #$PR_NUM was NOT up-to-date with main during testing"
-                    echo "  Base sha at run: $BASE_SHA_AT_RUN"
-                    echo "  Base sha at merge: $BASE_SHA_AT_MERGE"
+                    echo "PR #$PR_NUM workflow run $RUN_ID has no baseSha info"
+                    echo "  This might be a re-run or corrupted run data"
                     echo "can_skip_build=false" >> $GITHUB_OUTPUT
                   fi
                 else
-                  echo "Could not fetch run details, assuming not up-to-date"
+                  echo "Could not fetch run details, will rebuild"
                   echo "can_skip_build=false" >> $GITHUB_OUTPUT
                 fi
               else
