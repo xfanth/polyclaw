@@ -35,6 +35,7 @@ RUN apt-get update \
         make \
         g++ \
         pkg-config \
+        golang \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bun for faster builds
@@ -71,15 +72,29 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
         done; \
     fi
 
-# Install dependencies and build (only for OpenClaw)
-RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
-    pnpm install --no-frozen-lockfile && pnpm build; \
-  fi
+# Build based on upstream type
+RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
+        echo "Building PicoClaw (Go binary)..."; \
+        cd /build && \
+        go generate ./... && \
+        go build -v -ldflags="-X main.version=${UPSTREAM_VERSION}" -o /build/picoclaw ./cmd/picoclaw && \
+        echo "PicoClaw binary built successfully"; \
+    else \
+        echo "Building OpenClaw (Node.js)..."; \
+        pnpm install --no-frozen-lockfile && \
+        pnpm build && \
+        echo "OpenClaw build complete"; \
+    fi
 
-# Build UI components (only for OpenClaw)
+# Build UI components (OpenClaw only)
 RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
-    OPENCLAW_PREFER_PNPM=1 pnpm ui:install && pnpm ui:build; \
-  fi
+        echo "Building OpenClaw UI components..."; \
+        OPENCLAW_PREFER_PNPM=1 pnpm ui:install && \
+        pnpm ui:build && \
+        echo "OpenClaw UI build complete"; \
+    else \
+        echo "Skipping UI build for PicoClaw (no UI components)"; \
+    fi
 
 # Store upstream info for later stages
 RUN echo "${UPSTREAM}" > /tmp/upstream_name && \
@@ -200,15 +215,30 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
 # Copy application from builder
 COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
-# Create symlinks for proper path resolution
-RUN ln -s /opt/${UPSTREAM}/app/docs /opt/${UPSTREAM}/docs \
-    && ln -s /opt/${UPSTREAM}/app/assets /opt/${UPSTREAM}/assets \
-    && ln -s /opt/${UPSTREAM}/app/package.json /opt/${UPSTREAM}/package.json
+# For PicoClaw, move binary to correct location
+RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
+        echo "Moving PicoClaw binary..."; \
+        mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
+        rmdir /opt/picoclaw/app && \
+        chmod +x /opt/picoclaw/picoclaw && \
+        echo "PicoClaw binary moved to /opt/picoclaw/picoclaw"; \
+    else \
+        echo "OpenClaw application is in /opt/openclaw/app/"; \
+    fi
+
+# Create symlinks for proper path resolution (OpenClaw only)
+RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
+        echo "Creating OpenClaw symlinks..."; \
+        ln -s /opt/openclaw/app/docs /opt/openclaw/docs && \
+        ln -s /opt/openclaw/app/assets /opt/openclaw/assets && \
+        ln -s /opt/openclaw/app/package.json /opt/openclaw/package.json && \
+        echo "OpenClaw symlinks created"; \
+    fi
 
 # Create CLI wrapper using the upstream's entrypoint
 # hadolint ignore=SC2016
 RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
-    '    exec node /opt/picoclaw/app/picoclaw.mjs "$@"' \
+    '    exec /opt/picoclaw/picoclaw "$@"' \
     'else' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
     'fi' > /usr/local/bin/${UPSTREAM}.real \
@@ -218,8 +248,8 @@ RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTR
 RUN printf '%s\n' '#!/usr/bin/env bash' \
     'if [ -f /opt/openclaw/app/openclaw.mjs ]; then' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
-    'elif [ -f /opt/picoclaw/app/picoclaw.mjs ]; then' \
-    '    exec node /opt/picoclaw/app/picoclaw.mjs "$@"' \
+    'elif [ -f /opt/picoclaw/picoclaw ]; then' \
+    '    exec /opt/picoclaw/picoclaw "$@"' \
     'else' \
     '    echo "Error: No upstream application found" >&2' \
     '    exit 1' \
