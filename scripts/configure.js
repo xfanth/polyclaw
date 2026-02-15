@@ -116,11 +116,9 @@ function buildConfig() {
     }
 
     // Control UI
-    if (process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS === '') {
-        config.gateway.controlUi = {
-            allowedOrigins: parseList(process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || '10.0.0.0/16')
-        };
-    }
+    config.gateway.controlUi = {
+        allowedOrigins: parseList(process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || '10.0.0.0/16')
+    };
 
     // Browser - at root level, not under tools
     if (process.env.BROWSER_CDP_URL) {
