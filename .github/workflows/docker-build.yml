@@ -1,16 +1,17 @@
 # =============================================================================
 # OpenClaw/PicoClaw Docker Build and Push Workflow
 # =============================================================================
-# This workflow builds and pushes Docker images to GitHub Container Registry
-# (ghcr.io) for both OpenClaw and PicoClaw upstreams.
+# PR Flow:
+#   pre-commit → build → smoke-test → security-scan → upload artifact (NO GHCR push)
 #
-# Flow:
-# - PR: pre-commit → build (matrix) → smoke-test → security-scan → push-temp
-# - Merge to main:
-#   - If PR was tested successfully: push-from-pr (retag pr-123 to final tags)
-#   - If direct push (no PR): build → smoke-test → security-scan → push-from-build
+# Merge/Direct Push to Main:
+#   pre-commit → try pull artifact from PR
+#     - if no artifact OR PR not up-to-date with main → build → smoke-test → security-scan
+#   → push to GHCR
 #
-# All images pushed to GHCR are guaranteed to be tested and scanned.
+# This ensures:
+#   - Images only pushed to GHCR after tested AND merged to main
+#   - Build only happens if image never built before
 # =============================================================================
 
 name: Docker Build and Push
@@ -38,11 +39,9 @@ permissions:
   id-token: write
   security-events: write
   pull-requests: read
+  actions: read
 
 jobs:
-  # ===========================================================================
-  # Pre-Commit Checks
-  # ===========================================================================
   pre-commit:
     name: Pre-Commit Checks
     runs-on: ubuntu-latest
@@ -71,9 +70,6 @@ jobs:
       - name: Run pre-commit on all files
         run: pre-commit run --all-files --show-diff-on-failure
 
-  # ===========================================================================
-  # Python Tests
-  # ===========================================================================
   python-tests:
     name: Python Tests
     runs-on: ubuntu-latest
@@ -95,79 +91,88 @@ jobs:
       - name: Run unit tests
         run: uv run pytest tests/unit -v
 
-  # ===========================================================================
-  # Check PR Status (for push events to determine if we can skip build)
-  # ===========================================================================
-  check-pr-status:
-    name: Check PR Status
+  check-pr-artifacts:
+    name: Check PR Artifacts
     runs-on: ubuntu-latest
+    needs: [pre-commit, python-tests]
     if: github.event_name == 'push'
     outputs:
-      can_skip_build: ${{ steps.check.outputs.can_skip_build }}
-      pr_number: ${{ steps.check.outputs.pr_number }}
-      commit_sha: ${{ steps.check.outputs.commit_sha }}
+      has_artifacts: ${{ steps.check.outputs.has_artifacts }}
+      pr_run_id: ${{ steps.check.outputs.pr_run_id }}
+      needs_rebuild: ${{ steps.check.outputs.needs_rebuild }}
     steps:
-      - name: Check if merge came from a tested PR
+      - name: Check for PR artifacts
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           COMMIT_SHA="${{ github.sha }}"
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-
-          echo "commit_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
 
           PR_INFO=$(gh pr list \
             --repo "${{ github.repository }}" \
             --state merged \
-            --json number,mergeCommit,headRefName \
-            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, headBranch: .headRefName}")
+            --json number,mergeCommit,baseRefOid \
+            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, baseRefOid}")
 
-          if [ -n "$PR_INFO" ]; then
-            echo "Found merged PR info: $PR_INFO"
-            echo "$PR_INFO" | jq -r '"pr_number=\(.number)"' >> $GITHUB_OUTPUT
-
-            PR_NUM=$(echo "$PR_INFO" | jq -r '.number')
-            HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headBranch')
-            echo "PR head branch: $HEAD_BRANCH"
-
-            WORKFLOW_RUNS=$(gh run list \
-              --repo "${{ github.repository }}" \
-              --workflow "docker-build.yml" \
-              --branch "$HEAD_BRANCH" \
-              --event "pull_request" \
-              --status success \
-              --limit 10 \
-              --json headBranch,status,conclusion,displayTitle)
-
-            echo "Workflow runs:"
-            echo "$WORKFLOW_RUNS" | jq -r '.[] | "  \(.headBranch) - \(.conclusion)"'
-
-            MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | jq --arg branch "$HEAD_BRANCH" '.[] | select(.headBranch == $branch)')
-
-            if [ -n "$MATCHING_RUN" ]; then
-              echo "PR #$PR_NUM had successful workflow run on branch '$HEAD_BRANCH'"
-              echo "can_skip_build=true" >> $GITHUB_OUTPUT
-            else
-              echo "PR #$PR_NUM workflow status check failed, will build"
-              echo "can_skip_build=false" >> $GITHUB_OUTPUT
-            fi
-          else
+          if [ -z "$PR_INFO" ]; then
             echo "No merged PR found for commit $COMMIT_SHA"
-            echo "can_skip_build=false" >> $GITHUB_OUTPUT
-            echo "pr_number=" >> $GITHUB_OUTPUT
+            echo "has_artifacts=false" >> $GITHUB_OUTPUT
+            echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-  # ===========================================================================
-  # Build Docker Image (matrix for both upstreams)
-  # ===========================================================================
+          PR_NUM=$(echo "$PR_INFO" | jq -r '.number')
+          PR_BASE_SHA=$(echo "$PR_INFO" | jq -r '.baseRefOid')
+          echo "Found merged PR #$PR_NUM with base SHA $PR_BASE_SHA"
+
+          MAIN_BEFORE_SHA="${{ github.event.before }}"
+          echo "Main before merge: $MAIN_BEFORE_SHA"
+          echo "PR base SHA: $PR_BASE_SHA"
+
+          if [ "$PR_BASE_SHA" != "$MAIN_BEFORE_SHA" ]; then
+            echo "PR was not up-to-date with main at merge time"
+            echo "PR base: $PR_BASE_SHA"
+            echo "Main before: $MAIN_BEFORE_SHA"
+            echo "has_artifacts=false" >> $GITHUB_OUTPUT
+            echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          PR_RUNS=$(gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow "docker-build.yml" \
+            --json databaseId,event,conclusion,headBranch \
+            --jq ".[] | select(.event == \"pull_request\" and .conclusion == \"success\") | .databaseId")
+
+          if [ -z "$PR_RUNS" ]; then
+            echo "No successful PR workflow runs found"
+            echo "has_artifacts=false" >> $GITHUB_OUTPUT
+            echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          for RUN_ID in $PR_RUNS; do
+            ARTIFACTS=$(gh api repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts --jq '.artifacts | length')
+            if [ "$ARTIFACTS" -gt 0 ]; then
+              echo "Found artifacts in run $RUN_ID"
+              echo "has_artifacts=true" >> $GITHUB_OUTPUT
+              echo "pr_run_id=$RUN_ID" >> $GITHUB_OUTPUT
+              echo "needs_rebuild=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          done
+
+          echo "No artifacts found in successful PR runs"
+          echo "has_artifacts=false" >> $GITHUB_OUTPUT
+          echo "needs_rebuild=true" >> $GITHUB_OUTPUT
+
   build:
     name: Build Docker Image (${{ matrix.upstream }})
     runs-on: ubuntu-latest
     needs: [pre-commit, python-tests]
     if: |
       github.event_name == 'pull_request' ||
-      (github.event_name == 'push' && needs.check-pr-status.outputs.can_skip_build != 'true')
+      (github.event_name == 'push' && needs.check-pr-artifacts.outputs.needs_rebuild == 'true')
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
@@ -200,7 +205,6 @@ jobs:
 
           echo "Base commit: $BASE_COMMIT"
 
-          # For PRs, always use main
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "version=main" >> $GITHUB_OUTPUT
             echo "tags=main,latest" >> $GITHUB_OUTPUT
@@ -265,13 +269,38 @@ jobs:
           path: /tmp/docker-image-${{ matrix.upstream }}.tar
           retention-days: 1
 
-  # ===========================================================================
-  # Smoke Test (runs for both upstreams)
-  # ===========================================================================
+  download-pr-artifacts:
+    name: Download PR Artifacts (${{ matrix.upstream }})
+    runs-on: ubuntu-latest
+    needs: check-pr-artifacts
+    if: |
+      github.event_name == 'push' && 
+      needs.check-pr-artifacts.outputs.has_artifacts == 'true' &&
+      needs.check-pr-artifacts.outputs.needs_rebuild == 'false'
+    strategy:
+      matrix:
+        upstream: [openclaw, picoclaw]
+    steps:
+      - name: Download artifact from PR run
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.upstream }}
+          path: /tmp
+          run-id: ${{ needs.check-pr-artifacts.outputs.pr_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-upload artifact for downstream jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.upstream }}
+          path: /tmp/docker-image-${{ matrix.upstream }}.tar
+          retention-days: 1
+
   smoke-test:
     name: Smoke Test (${{ matrix.upstream }})
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build]
+    if: always() && needs.build.result == 'success'
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
@@ -307,13 +336,11 @@ jobs:
             /tmp/doctor.log
           retention-days: 3
 
-  # ===========================================================================
-  # Security Scan (runs for both upstreams)
-  # ===========================================================================
   security-scan:
     name: Security Scan (${{ matrix.upstream }})
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build]
+    if: always() && needs.build.result == 'success'
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
@@ -347,159 +374,107 @@ jobs:
           sarif_file: 'trivy-results-${{ matrix.upstream }}.sarif'
           category: ${{ matrix.upstream }}
 
-  # ===========================================================================
-  # Push Temp (PR only - push to pr-{number}-{upstream} tag)
-  # ===========================================================================
-  push-temp:
-    name: Push Temp Image (${{ matrix.upstream }})
+  smoke-test-from-artifact:
+    name: Smoke Test from Artifact (${{ matrix.upstream }})
     runs-on: ubuntu-latest
-    needs: [build, smoke-test, security-scan]
-    if: github.event_name == 'pull_request'
+    needs: [download-pr-artifacts]
+    if: github.event_name == 'push' && needs.download-pr-artifacts.result == 'success'
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
         with:
           name: docker-image-${{ matrix.upstream }}
 
-      - name: Load and push temp image
+      - name: Load Docker image
         run: |
           docker load -i docker-image-${{ matrix.upstream }}.tar
 
-          PR_TAG="pr-${{ github.event.pull_request.number }}-${{ matrix.upstream }}"
-          SOURCE_TAG="${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:${{ needs.build.outputs.image_tag }}"
+      - name: Get image tag
+        id: get-tag
+        run: |
+          IMAGE_TAG=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ matrix.upstream }}" | head -1)
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "Found image: $IMAGE_TAG"
 
-          docker tag "$SOURCE_TAG" "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$PR_TAG"
-          docker push "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$PR_TAG"
+      - name: Run smoke test
+        run: |
+          chmod +x scripts/smoke-test.sh
+          UPSTREAM=${{ matrix.upstream }} ./scripts/smoke-test.sh
+        env:
+          IMAGE_TAG: ${{ steps.get-tag.outputs.image_tag }}
+        timeout-minutes: 15
 
-          echo "Pushed temp image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$PR_TAG"
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-artifact-${{ matrix.upstream }}
+          path: |
+            /tmp/build.log
+            /tmp/compose.log
+            /tmp/doctor.log
+          retention-days: 3
 
-  # ===========================================================================
-  # Push from PR (merge with tested PR - just retag)
-  # ===========================================================================
-  push-from-pr:
-    name: Push from Tested PR
+  security-scan-from-artifact:
+    name: Security Scan from Artifact (${{ matrix.upstream }})
     runs-on: ubuntu-latest
-    needs: [pre-commit, check-pr-status]
-    if: github.event_name == 'push' && needs.check-pr-status.outputs.can_skip_build == 'true'
+    needs: [download-pr-artifacts]
+    if: github.event_name == 'push' && needs.download-pr-artifacts.result == 'success'
+    strategy:
+      matrix:
+        upstream: [openclaw, picoclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
+          name: docker-image-${{ matrix.upstream }}
 
-      - name: Determine OpenClaw version and tags
-        id: determine-version
+      - name: Load Docker image
         run: |
-          BASE_COMMIT="${{ github.event.before }}"
+          docker load -i docker-image-${{ matrix.upstream }}.tar
 
-          TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
-          MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+      - name: Get image tag
+        id: get-tag
+        run: |
+          IMAGE_TAG=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ matrix.upstream }}" | head -1)
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "Found image: $IMAGE_TAG"
 
-          if [ "$TAGGED_CHANGED" = "true" ]; then
-            OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit)
-            TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
-              jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
-              sed 's|refs/tags/||' | head -n1)
-            if [ -z "$TAG" ]; then
-              TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
-            fi
-            echo "version=$TAG" >> $GITHUB_OUTPUT
-            echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
-          elif [ "$MAIN_CHANGED" = "true" ]; then
-            echo "version=oc_main" >> $GITHUB_OUTPUT
-            echo "tags=oc_main" >> $GITHUB_OUTPUT
-          else
-            echo "version=main" >> $GITHUB_OUTPUT
-            echo "tags=main,latest" >> $GITHUB_OUTPUT
-            echo "Building main from xfanth/openclaw branch"
-          fi
-
-          CURRENT_COMMIT=$(git rev-parse HEAD)
-          CURRENT_COMMIT_DATE=$(git show -s --format=%ct "$CURRENT_COMMIT")
-
-          echo "Current commit: $CURRENT_COMMIT"
-          echo "Current commit date: $CURRENT_COMMIT_DATE"
-
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            LATEST_MANIFEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://ghcr.io/v2/${{ github.repository }}/manifests/latest" 2>/dev/null)
-
-            if [ $? -eq 0 ] && [ -n "$LATEST_MANIFEST" ]; then
-              LATEST_CREATED=$(echo "$LATEST_MANIFEST" | jq -r '.created // empty')
-              echo "Existing latest image created: $LATEST_CREATED"
-
-              CURRENT_EPOCH=$(date -d "$CURRENT_COMMIT_DATE" +%s 2>/dev/null || echo "0")
-              LATEST_EPOCH=$(date -d "$LATEST_CREATED" +%s 2>/dev/null || echo "0")
-
-              echo "Current epoch: $CURRENT_EPOCH"
-              echo "Latest epoch: $LATEST_EPOCH"
-
-              if [ "$CURRENT_EPOCH" -le "$LATEST_EPOCH" ]; then
-                echo "should_tag_latest=false" >> $GITHUB_OUTPUT
-                echo "Not tagging as latest - existing image is more recent"
-              else
-                echo "should_tag_latest=true" >> $GITHUB_OUTPUT
-                echo "Will tag as latest - current commit is more recent"
-              fi
-            else
-              echo "should_tag_latest=true" >> $GITHUB_OUTPUT
-              echo "No existing latest image found or couldn't fetch, will tag as latest"
-            fi
-          else
-            echo "should_tag_latest=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          image-ref: ${{ steps.get-tag.outputs.image_tag }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.upstream }}.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          ignore-unfixed: true
 
-      - name: Install crane
-        uses: imjasonh/setup-crane@v0.5
+      - name: Upload scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results-${{ matrix.upstream }}.sarif'
+          category: ${{ matrix.upstream }}
 
-      - name: Retag and push from PR image
-        run: |
-          PR_TAG="pr-${{ needs.check-pr-status.outputs.pr_number }}"
-          TAGS="${{ steps.determine-version.outputs.tags }}"
-
-          SOURCE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$PR_TAG"
-
-          echo "Retagging $SOURCE to final tags..."
-
-          IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
-          for TAG in "${TAG_ARRAY[@]}"; do
-            TARGET="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$TAG"
-            echo "Copying to $TARGET"
-            crane copy "$SOURCE" "$TARGET"
-          done
-
-          echo "::notice::Image pushed from tested PR #${{ needs.check-pr-status.outputs.pr_number }}"
-
-  # ===========================================================================
-  # Push from Build (direct push or untested PR - needs full build)
-  # ===========================================================================
-  push-from-build:
-    name: Push from Build (${{ matrix.upstream }})
+  push-to-ghcr-from-build:
+    name: Push to GHCR from Build (${{ matrix.upstream }})
     runs-on: ubuntu-latest
-    needs: [pre-commit, python-tests, check-pr-status, build, smoke-test, security-scan]
-    if: github.event_name == 'push' && needs.check-pr-status.outputs.can_skip_build != 'true'
+    needs: [pre-commit, python-tests, build, smoke-test, security-scan]
+    if: |
+      github.event_name == 'push' && 
+      needs.build.result == 'success' &&
+      needs.smoke-test.result == 'success' &&
+      needs.security-scan.result == 'success'
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
@@ -532,6 +507,113 @@ jobs:
           for TAG in "${TAG_ARRAY[@]}"; do
             TARGET="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$TAG"
             docker tag "${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$VERSION" "$TARGET"
+            docker push "$TARGET"
+            echo "Pushed $TARGET"
+          done
+
+  push-to-ghcr-from-artifact:
+    name: Push to GHCR from Artifact (${{ matrix.upstream }})
+    runs-on: ubuntu-latest
+    needs: [pre-commit, python-tests, download-pr-artifacts, smoke-test-from-artifact, security-scan-from-artifact]
+    if: |
+      github.event_name == 'push' && 
+      needs.download-pr-artifacts.result == 'success' &&
+      needs.smoke-test-from-artifact.result == 'success' &&
+      needs.security-scan-from-artifact.result == 'success'
+    strategy:
+      matrix:
+        upstream: [openclaw, picoclaw]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version and tags
+        id: determine-version
+        run: |
+          BASE_COMMIT="${{ github.event.before }}"
+
+          TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
+          MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+
+          if [ "$TAGGED_CHANGED" = "true" ]; then
+            OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit)
+            TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
+              jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
+              sed 's|refs/tags/||' | head -n1)
+            if [ -z "$TAG" ]; then
+              TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
+            fi
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+            echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
+          elif [ "$MAIN_CHANGED" = "true" ]; then
+            echo "version=oc_main" >> $GITHUB_OUTPUT
+            echo "tags=oc_main" >> $GITHUB_OUTPUT
+          else
+            echo "version=main" >> $GITHUB_OUTPUT
+            echo "tags=main,latest" >> $GITHUB_OUTPUT
+          fi
+
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          CURRENT_COMMIT_DATE=$(git show -s --format=%ct "$CURRENT_COMMIT")
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            LATEST_MANIFEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://ghcr.io/v2/${{ github.repository }}/manifests/latest" 2>/dev/null || echo "")
+
+            if [ -n "$LATEST_MANIFEST" ]; then
+              LATEST_CREATED=$(echo "$LATEST_MANIFEST" | jq -r '.created // empty' 2>/dev/null || echo "")
+
+              if [ -n "$LATEST_CREATED" ]; then
+                CURRENT_EPOCH=$(date -d "$CURRENT_COMMIT_DATE" +%s 2>/dev/null || echo "0")
+                LATEST_EPOCH=$(date -d "$LATEST_CREATED" +%s 2>/dev/null || echo "0")
+
+                if [ "$CURRENT_EPOCH" -le "$LATEST_EPOCH" ]; then
+                  echo "should_tag_latest=false" >> $GITHUB_OUTPUT
+                else
+                  echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+                fi
+              else
+                echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.upstream }}
+
+      - name: Load and push image
+        run: |
+          docker load -i docker-image-${{ matrix.upstream }}.tar
+
+          IMAGE_ID=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ matrix.upstream }}" | head -1)
+          echo "Loaded image: $IMAGE_ID"
+
+          TAGS="${{ steps.determine-version.outputs.tags }}"
+          SHOULD_LATEST="${{ steps.determine-version.outputs.should_tag_latest }}"
+
+          IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
+          for TAG in "${TAG_ARRAY[@]}"; do
+            if [ "$TAG" = "latest" ] && [ "$SHOULD_LATEST" = "false" ]; then
+              echo "Skipping latest tag - existing image is more recent"
+              continue
+            fi
+            TARGET="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$TAG"
+            docker tag "$IMAGE_ID" "$TARGET"
             docker push "$TARGET"
             echo "Pushed $TARGET"
           done
