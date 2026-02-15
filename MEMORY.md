@@ -17,8 +17,27 @@ This workflow is NON-NEGOTIABLE for all code changes.
 
 ## Important Rules
 
-- **Never merge PRs without approval** - Create the PR and wait for review/approval before merging
+- **Never merge PRs without approval** - Create PR and wait for review/approval before merging
 - Do not use `--admin` flag to bypass branch protection rules
+
+## Go Version Management for Docker Images
+
+- **Always verify before changing Go version**:
+  - Check what Go version is actually required (e.g., by checking upstream go.mod or build errors)
+  - Verify the version exists at go.dev/dl before using it
+  - Test the URL returns a 200 OK before including it in Dockerfile
+- Never assume versions - use official URLs and verify
+- Search https://go.dev/dl for available versions before making changes
+
+- **Go 1.25.7 is the current stable release** (Feb 2026):
+  - Official URL: https://go.dev/dl/go1.25.7.linux-amd64.tar.gz
+  - This version is the latest stable and includes bug fixes
+
+- **Previous Debian `golang` package is outdated** (Go 1.25.7):
+  - Installing Go from Debian apt (golang package) often lags behind official releases
+  - This was causing picoclaw build failures
+- **Always use official Go from go.dev for Docker builds**
+
 
 ## Available Tools
 
