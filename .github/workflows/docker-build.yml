@@ -1,8 +1,8 @@
 # =============================================================================
-# OpenClaw/PicoClaw Docker Build and Push Workflow
+# OpenClaw/PicoClaw/IronClaw Docker Build and Push Workflow
 # =============================================================================
 # This workflow builds and pushes Docker images to GitHub Container Registry
-# (ghcr.io) for both OpenClaw and PicoClaw upstreams.
+# (ghcr.io) for OpenClaw, PicoClaw, and IronClaw upstreams.
 #
 # Flow:
 # - PR: pre-commit → build (matrix) → smoke-test → security-scan → push-temp
@@ -201,7 +201,7 @@ jobs:
       (github.event_name == 'push' && needs.check-pr-status.outputs.can_skip_build != 'true')
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
         include:
           - upstream: openclaw
             github_owner: openclaw
@@ -209,6 +209,9 @@ jobs:
           - upstream: picoclaw
             github_owner: sipeed
             github_repo: picoclaw
+          - upstream: ironclaw
+            github_owner: nearai
+            github_repo: ironclaw
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
       upstream_version: ${{ steps.determine-version.outputs.version }}
@@ -305,7 +308,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -347,7 +350,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -388,7 +391,7 @@ jobs:
     if: github.event_name == 'pull_request'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -535,7 +538,7 @@ jobs:
     if: github.event_name == 'push' && needs.check-pr-status.outputs.can_skip_build != 'true'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
