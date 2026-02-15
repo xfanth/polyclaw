@@ -42,7 +42,25 @@ This workflow is NON-NEGOTIABLE for all code changes.
   - `uname -m` returns `x86_64` but Go download URLs use `amd64`
   - For Docker linux/amd64 builds, use hardcoded `amd64` in download URL
 
+## GitHub Actions Workflow Dependencies
 
+- **Job dependency race condition**: Jobs with `needs:` dependency can sometimes start before the dependency job's outputs are fully available
+  - In `.github/workflows/docker-build.yml`, build jobs depend on `check-pr-status` to get `can_skip_build` output
+  - However, outputs aren't immediately available to dependent jobs - there's a small delay
+  - If dependent jobs start too early, they can't access the output and fail with "State not set" or similar errors
+  - **Solution**: Don't have build jobs depend on external output. Instead, check the PR status logic inside each build job itself
+
+- **Workflow `needs` clause behavior**:
+  - `needs: [job1, job2]` means the job waits for BOTH jobs to complete
+  - The dependency job must finish completely (including output setting) before the dependent job starts
+  - GitHub Actions has a delay of several seconds between job completion and output availability
+  - **Pattern**: Have self-contained logic in each job that can independently decide whether to run, rather than relying on outputs from a separate job
+
+- **Correct pattern for PR artifact reuse**:
+  - Each build job should check if it came from a PR merge and has available artifacts
+  - If yes, skip build and download artifacts from PR run
+  - If no, build fresh images
+  - This avoids the race condition where jobs try to access outputs before they're available
 ## Available Tools
 
 The following tools are available:

@@ -108,6 +108,27 @@ gh pr create --title "Description" --body "Details"
 
 After approval, merge the pull request and delete the branch:
 
+## GitHub Actions Workflow Dependencies
+
+- **Critical: Job dependency race conditions**:
+  - Jobs with `needs:` dependencies can access outputs before the dependency job fully completes
+  - GitHub Actions has a delay between job completion and output availability
+  - If dependent jobs start early, they fail with errors like "State not set"
+  - **Don't rely on outputs from other jobs** for critical decisions like whether to skip builds
+  - **Pattern**: Put the check logic inside each job itself, making it self-contained
+
+- **When fixing workflow dependency issues**:
+  - Look for jobs that depend on outputs from other jobs
+  - Add a sleep/delay or check the condition inside the dependent job
+  - Better yet: Make each job independently determine its behavior without needing external outputs
+  - Document the dependency pattern in MEMORY.md so future agents understand the issue
+
+- **Correct workflow pattern for PR artifact reuse**:
+  - Build jobs should check internally: "Is this from a PR merge with available artifacts?"
+  - If yes: Skip build, download artifacts from PR run
+  - If no: Build fresh images
+  - This avoids race conditions where jobs access outputs before they're set
+
 ```bash
 gh pr merge
 git branch -d feature/description-of-change
