@@ -89,8 +89,7 @@ RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
 # Build UI components (OpenClaw only)
 RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
         echo "Building OpenClaw UI components..."; \
-        ENV OPENCLAW_PREFER_PNPM=1 && \
-        pnpm ui:install && \
+        OPENCLAW_PREFER_PNPM=1 pnpm ui:install && \
         pnpm ui:build && \
         echo "OpenClaw UI build complete"; \
     else \
@@ -214,17 +213,17 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
     && chown -R ${UPSTREAM}:${UPSTREAM} /data
 
 # Copy application from builder
+COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
+
+# For PicoClaw, move binary to correct location
 RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
-        echo "Copying PicoClaw binary..."; \
-        mkdir -p /opt/picoclaw && \
-        cp /build/picoclaw /opt/picoclaw/picoclaw && \
+        echo "Moving PicoClaw binary..."; \
+        mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
+        rmdir /opt/picoclaw/app && \
         chmod +x /opt/picoclaw/picoclaw && \
-        echo "PicoClaw binary copied"; \
+        echo "PicoClaw binary moved to /opt/picoclaw/picoclaw"; \
     else \
-        echo "Copying OpenClaw application..."; \
-        mkdir -p /opt/openclaw && \
-        cp -r /build/* /opt/openclaw/app/ && \
-        echo "OpenClaw application copied"; \
+        echo "OpenClaw application is in /opt/openclaw/app/"; \
     fi
 
 # Create symlinks for proper path resolution (OpenClaw only)
