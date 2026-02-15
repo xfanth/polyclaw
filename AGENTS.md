@@ -78,11 +78,13 @@ git push -u origin feature/description-of-change
 ```
 
 ### Pull Request and Merge
-Create a pull request for review before merging. Use the GitHub CLI:
+Create a pull request for review. Use the GitHub CLI:
 
 ```bash
 gh pr create --title "Description" --body "Details"
 ```
+
+**IMPORTANT: Do NOT merge PRs automatically. Wait for approval before merging. Never use `--admin` flag to bypass branch protection.**
 
 After approval, merge the pull request and delete the branch:
 

@@ -15,6 +15,11 @@ This workflow is NON-NEGOTIABLE for all code changes.
 
 **IMPORTANT**: You must always pull origin/main into your branch whenever making a change. You must resolve conflicts if they exist.
 
+## Important Rules
+
+- **Never merge PRs without approval** - Create the PR and wait for review/approval before merging
+- Do not use `--admin` flag to bypass branch protection rules
+
 ## Available Tools
 
 The following tools are available:
