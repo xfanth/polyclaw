@@ -38,6 +38,10 @@ This workflow is NON-NEGOTIABLE for all code changes.
   - This was causing picoclaw build failures
 - **Always use official Go from go.dev for Docker builds**
 
+- **Architecture naming**:
+  - `uname -m` returns `x86_64` but Go download URLs use `amd64`
+  - For Docker linux/amd64 builds, use hardcoded `amd64` in download URL
+
 
 ## Available Tools
 
