@@ -244,17 +244,25 @@ jobs:
 
           echo "Base commit: $BASE_COMMIT"
 
+          # For PRs, use stable tagged version for OpenClaw, main for PicoClaw
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # For PRs, use the latest tagged version from upstream
-            LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name')
-            if [ "$LATEST_TAG" != "null" ] && [ -n "$LATEST_TAG" ]; then
-              echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-              echo "tags=$LATEST_TAG,latest" >> $GITHUB_OUTPUT
-              echo "Building OpenClaw $LATEST_TAG (stable release) for PR"
+            if [ "${{ matrix.upstream }}" = "openclaw" ]; then
+              # For OpenClaw, use latest tagged version
+              LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name')
+              if [ "$LATEST_TAG" != "null" ] && [ -n "$LATEST_TAG" ]; then
+                echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+                echo "tags=$LATEST_TAG,latest" >> $GITHUB_OUTPUT
+                echo "Building OpenClaw $LATEST_TAG (stable release) for PR"
+              else
+                echo "version=main" >> $GITHUB_OUTPUT
+                echo "tags=main,latest" >> $GITHUB_OUTPUT
+                echo "Building OpenClaw main (development) for PR"
+              fi
             else
-              echo "version=main" >> $GITHUB_OUTPUT
-              echo "tags=main,latest" >> $GITHUB_OUTPUT
-              echo "Building OpenClaw main (development) for PR"
+              # For PicoClaw, always build from main branch
+              echo "version=pc_main" >> $GITHUB_OUTPUT
+              echo "tags=pc_main" >> $GITHUB_OUTPUT
+              echo "Building PicoClaw main branch for PR"
             fi
           fi
 
