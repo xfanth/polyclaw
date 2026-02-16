@@ -261,7 +261,7 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
         echo "OpenClaw symlinks created"; \
     fi
 
-# Create CLI wrapper using the upstream's entrypoint
+# Create CLI wrapper using the upstream's entrypoint (no .real suffix - this IS the main binary)
 # hadolint ignore=SC2016
 RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
@@ -269,8 +269,8 @@ RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTR
     '    exec /opt/ironclaw/ironclaw "$@"' \
     'else' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
-    'fi' > /usr/local/bin/${UPSTREAM}.real \
-    && chmod +x /usr/local/bin/${UPSTREAM}.real
+    'fi' > /usr/local/bin/${UPSTREAM} \
+    && chmod +x /usr/local/bin/${UPSTREAM}
 
 # Create universal CLI wrapper that works regardless of upstream
 RUN printf '%s\n' '#!/usr/bin/env bash' \
@@ -318,10 +318,7 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/ /app/scripts/
 COPY --chown=${UPSTREAM}:${UPSTREAM} nginx.conf /etc/nginx/sites-available/${UPSTREAM}
 RUN chmod +x /app/scripts/*.sh \
-    && chmod +x /usr/local/bin/${UPSTREAM} \
-    && ln -s /etc/nginx/sites-available/${UPSTREAM} /etc/nginx/sites-enabled/${UPSTREAM} \
-    && cp /usr/local/bin/${UPSTREAM} /usr/local/bin/run-as-${UPSTREAM} \
-    && chmod +x /usr/local/bin/run-as-${UPSTREAM}
+    && ln -s /etc/nginx/sites-available/${UPSTREAM} /etc/nginx/sites-enabled/${UPSTREAM}
 
 # Create health check script
 RUN printf '%s\n' '#!/bin/bash' "curl -f http://localhost:\${PORT:-8080}/healthz || exit 1" > /app/scripts/healthcheck.sh \
