@@ -117,7 +117,7 @@ function buildConfig() {
 
     // Control UI
     config.gateway.controlUi = {
-        allowedOrigins: parseList(process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || '10.0.0.0/16')
+        allowedOrigins: parseList(process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || '*')
     };
 
     // Browser - at root level, not under tools

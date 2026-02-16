@@ -1,5 +1,5 @@
 # =============================================================================
-# OpenClaw/PicoClaw Docker Build and Push Workflow
+# OpenClaw/PicoClaw/IronClaw Docker Build and Push Workflow
 # =============================================================================
 # PR Flow:
 #   pre-commit → python-tests → build → smoke-test → security-scan → artifacts
@@ -184,6 +184,8 @@ jobs:
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
         include:
           - upstream: openclaw
             github_owner: openclaw
@@ -191,6 +193,9 @@ jobs:
           - upstream: picoclaw
             github_owner: sipeed
             github_repo: picoclaw
+          # - upstream: ironclaw
+          #   github_owner: nearai
+          #   github_repo: ironclaw
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
       upstream_version: ${{ steps.determine-version.outputs.version }}
@@ -304,6 +309,8 @@ jobs:
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -343,6 +350,8 @@ jobs:
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -385,6 +394,8 @@ jobs:
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Download artifact from PR run
         uses: actions/download-artifact@v4
@@ -417,6 +428,8 @@ jobs:
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -2,7 +2,7 @@
 Upstream configuration module for OpenClaw Docker.
 
 This module provides configuration and validation for different upstream
-sources (openclaw, picoclaw).
+sources (openclaw, picoclaw, ironclaw).
 """
 
 from dataclasses import dataclass
@@ -15,6 +15,7 @@ class UpstreamType(str, Enum):
 
     OPENCLAW = "openclaw"
     PICOCLAW = "picoclaw"
+    IRONCLAW = "ironclaw"
 
     @classmethod
     def from_string(cls, value: str) -> Self:
@@ -81,6 +82,16 @@ UPSTREAMS: dict[UpstreamType, UpstreamConfig] = {
         app_directory="/opt/picoclaw/app",
         mjs_entrypoint="picoclaw.mjs",
     ),
+    UpstreamType.IRONCLAW: UpstreamConfig(
+        name=UpstreamType.IRONCLAW,
+        github_owner="nearai",
+        github_repo="ironclaw",
+        default_branch="main",
+        description="IronClaw by NEAR AI - AI agent gateway",
+        cli_name="ironclaw",
+        app_directory="/opt/ironclaw/app",
+        mjs_entrypoint="ironclaw.mjs",
+    ),
 }
 
 
@@ -102,7 +113,7 @@ def validate_version_format(version: str) -> bool:
     """Validate version string format."""
     if not version:
         return False
-    valid_prefixes = ("v", "main", "latest", "oc_", "pc_")
+    valid_prefixes = ("v", "main", "latest", "oc_", "pc_", "ic_")
     return version.startswith(valid_prefixes) or version.replace(".", "").isdigit()
 
 
