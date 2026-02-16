@@ -143,3 +143,25 @@ git branch -d feature/description-of-change
 - Use `make help` to see available commands
 - The Makefile contains many common operations
 - **Docker image builds are done by GitHub Actions** - do not build locally
+
+## Supported Upstreams
+
+This project builds Docker images for three upstream variants:
+
+| Upstream | Language | Repo | Build Command |
+|----------|----------|------|---------------|
+| openclaw | Node.js | openclaw/openclaw | `pnpm build` |
+| picoclaw | Go | sipeed/picoclaw | `go build` |
+| ironclaw | Rust | nearai/ironclaw | `cargo build --release` |
+
+When modifying CI workflows that use the upstream matrix, update ALL of:
+- `.github/workflows/docker-build.yml` (build, smoke-test, security-scan, push-to-ghcr jobs)
+- `.github/workflows/manual-release.yml` (build, security-scan jobs)
+
+## Trivy/Code Scanning Warnings
+
+When changing the security-scan matrix (e.g., adding a new upstream):
+- GitHub Code Scanning may show "X configurations not found" warning
+- This is **expected behavior** - the old matrix categories don't match new ones
+- The warning resolves automatically after merge to main
+- All scans still run correctly; the warning is informational only
