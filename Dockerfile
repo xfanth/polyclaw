@@ -63,7 +63,7 @@ RUN set -eux && \
         GITHUB_OWNER="openclaw"; \
         GITHUB_REPO="openclaw"; \
     fi && \
-    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ]; then \
+    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ] || [ "${UPSTREAM_VERSION}" = "ic_main" ]; then \
         git clone --depth 1 --branch main "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
     else \
         git clone --depth 1 --branch "${UPSTREAM_VERSION}" "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
