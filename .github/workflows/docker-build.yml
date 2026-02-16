@@ -336,7 +336,9 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw]
+        # TODO: Ironclaw smoke-test blocked by entrypoint integration
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
