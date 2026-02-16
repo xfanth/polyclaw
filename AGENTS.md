@@ -98,6 +98,8 @@ git push -u origin feature/description-of-change
 ```
 
 ### Pull Request and Merge
+**CRITICAL: ALWAYS create a PR for every code change. NEVER push directly to main.**
+
 Create a pull request for review. Use the GitHub CLI:
 
 ```bash
