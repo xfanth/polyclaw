@@ -44,13 +44,22 @@ log_success() { echo -e "${GREEN}[PASS]${NC} $1"; }
 log_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
-# Check if PicoClaw - skip OpenClaw-specific tests
+# Check if PicoClaw/IronClaw - skip OpenClaw-specific tests
 if [ "$UPSTREAM" = "picoclaw" ]; then
     log_warn "PicoClaw smoke tests are temporarily disabled due to different architecture"
     log_warn "PicoClaw does not have OpenClaw-specific endpoints (/healthz, etc.)"
     log_warn "Skipping all smoke tests for PicoClaw"
     log_success "Docker image build test already passed (built successfully)"
     log_success "PicoClaw smoke tests will be enabled once architecture is documented"
+    exit 0
+fi
+
+if [ "$UPSTREAM" = "ironclaw" ]; then
+    log_warn "IronClaw smoke tests are temporarily disabled due to different architecture"
+    log_warn "IronClaw is a Rust binary with different endpoints"
+    log_warn "Skipping all smoke tests for IronClaw"
+    log_success "Docker image build test already passed (built successfully)"
+    log_success "IronClaw smoke tests will be enabled once architecture is documented"
     exit 0
 fi
 

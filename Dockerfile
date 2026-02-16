@@ -1,16 +1,17 @@
 # =============================================================================
-# OpenClaw/PicoClaw Docker Image - Debian Bookworm (LTS) Based
+# OpenClaw/PicoClaw/IronClaw Docker Image - Debian Bookworm (LTS) Based
 # =============================================================================
-# This Dockerfile builds either OpenClaw or PicoClaw from source and creates a
-# production-ready image with all necessary components for 24/7 operation.
+# This Dockerfile builds either OpenClaw, PicoClaw, or IronClaw from source and
+# creates a production-ready image with all necessary components for 24/7 operation.
 #
 # Build Arguments:
-#   UPSTREAM        - Which upstream to build: "openclaw" or "picoclaw" (default: openclaw)
+#   UPSTREAM        - Which upstream to build: "openclaw", "picoclaw", or "ironclaw" (default: openclaw)
 #   UPSTREAM_VERSION - Version/branch to build (default: main)
 #
 # Examples:
 #   docker build -t openclaw:latest .
 #   docker build --build-arg UPSTREAM=picoclaw -t picoclaw:latest .
+#   docker build --build-arg UPSTREAM=ironclaw -t ironclaw:latest .
 #   docker build --build-arg UPSTREAM=openclaw --build-arg UPSTREAM_VERSION=v2026.2.1 -t openclaw:v2026.2.1 .
 # =============================================================================
 
@@ -44,9 +45,13 @@ RUN curl -fsSL "https://go.dev/dl/go1.25.7.linux-amd64.tar.gz" -o go.tar.gz \
     && rm go.tar.gz \
     && for bin in /usr/local/go/bin/*; do ln -sf "$bin" /usr/local/bin; done
 
+# Install Rust for IronClaw builds
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Install Bun for faster builds
 RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/usr/local/go/bin:/root/.bun/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/root/.bun/bin:/root/.cargo/bin:${PATH}"
 
 # Enable corepack for pnpm (install globally first as it's not bundled in node:25)
 RUN npm install -g corepack@0.34.6 --force && corepack enable
@@ -59,11 +64,14 @@ RUN set -eux && \
     if [ "${UPSTREAM}" = "picoclaw" ]; then \
         GITHUB_OWNER="sipeed"; \
         GITHUB_REPO="picoclaw"; \
+    elif [ "${UPSTREAM}" = "ironclaw" ]; then \
+        GITHUB_OWNER="nearai"; \
+        GITHUB_REPO="ironclaw"; \
     else \
         GITHUB_OWNER="openclaw"; \
         GITHUB_REPO="openclaw"; \
     fi && \
-    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ]; then \
+    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ] || [ "${UPSTREAM_VERSION}" = "ic_main" ]; then \
         git clone --depth 1 --branch main "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
     else \
         git clone --depth 1 --branch "${UPSTREAM_VERSION}" "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
@@ -85,6 +93,12 @@ RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         go generate ./... && \
         go build -v -ldflags="-X main.version=${UPSTREAM_VERSION}" -o /build/picoclaw ./cmd/picoclaw && \
         echo "PicoClaw binary built successfully"; \
+    elif [ "${UPSTREAM}" = "ironclaw" ]; then \
+        echo "Building IronClaw (Rust binary)..."; \
+        cd /build && \
+        cargo build --release && \
+        cp target/release/ironclaw /build/ironclaw && \
+        echo "IronClaw binary built successfully"; \
     else \
         echo "Building OpenClaw (Node.js)..."; \
         pnpm install --no-frozen-lockfile && \
@@ -99,7 +113,7 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
         pnpm ui:build && \
         echo "OpenClaw UI build complete"; \
     else \
-        echo "Skipping UI build for PicoClaw (no UI components)"; \
+        echo "Skipping UI build for ${UPSTREAM} (no UI components)"; \
     fi
 
 # Store upstream info for later stages
@@ -221,13 +235,19 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
 # Copy application from builder
 COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
-# For PicoClaw, move binary to correct location and clean up
+# For PicoClaw/IronClaw, move binary to correct location and clean up
 RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         echo "Moving PicoClaw binary..."; \
         mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
         rm -rf /opt/picoclaw/app && \
         chmod +x /opt/picoclaw/picoclaw && \
         echo "PicoClaw binary moved to /opt/picoclaw/picoclaw"; \
+    elif [ "${UPSTREAM}" = "ironclaw" ]; then \
+        echo "Moving IronClaw binary..."; \
+        mv /opt/ironclaw/app/ironclaw /opt/ironclaw/ironclaw && \
+        rm -rf /opt/ironclaw/app && \
+        chmod +x /opt/ironclaw/ironclaw && \
+        echo "IronClaw binary moved to /opt/ironclaw/ironclaw"; \
     else \
         echo "OpenClaw application is in /opt/openclaw/app/"; \
     fi
@@ -245,6 +265,8 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
 # hadolint ignore=SC2016
 RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
+    'elif [ "$UPSTREAM" = "ironclaw" ]; then' \
+    '    exec /opt/ironclaw/ironclaw "$@"' \
     'else' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
     'fi' > /usr/local/bin/${UPSTREAM}.real \
@@ -256,6 +278,8 @@ RUN printf '%s\n' '#!/usr/bin/env bash' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
     'elif [ -f /opt/picoclaw/picoclaw ]; then' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
+    'elif [ -f /opt/ironclaw/ironclaw ]; then' \
+    '    exec /opt/ironclaw/ironclaw "$@"' \
     'else' \
     '    echo "Error: No upstream application found" >&2' \
     '    exit 1' \
