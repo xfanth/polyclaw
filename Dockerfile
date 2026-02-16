@@ -63,7 +63,7 @@ RUN set -eux && \
         GITHUB_OWNER="openclaw"; \
         GITHUB_REPO="openclaw"; \
     fi && \
-    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ]; then \
+    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ] || [ "${UPSTREAM_VERSION}" = "ic_main" ]; then \
         git clone --depth 1 --branch main "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
     else \
         git clone --depth 1 --branch "${UPSTREAM_VERSION}" "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
@@ -241,31 +241,19 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
         echo "OpenClaw symlinks created"; \
     fi
 
-# Create CLI wrapper using the upstream's entrypoint
+# Create CLI wrapper using the upstream's entrypoint (no .real suffix - this IS the main binary)
 # hadolint ignore=SC2016
 RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
+    'elif [ "$UPSTREAM" = "ironclaw" ]; then' \
+    '    exec node /opt/ironclaw/app/ironclaw.mjs "$@"' \
     'else' \
     '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
-    'fi' > /usr/local/bin/${UPSTREAM}.real \
-    && chmod +x /usr/local/bin/${UPSTREAM}.real
+    'fi' > /usr/local/bin/${UPSTREAM} \
+    && chmod +x /usr/local/bin/${UPSTREAM}
 
-# Create universal CLI wrapper that works regardless of upstream
-RUN printf '%s\n' '#!/usr/bin/env bash' \
-    'if [ -f /opt/openclaw/app/openclaw.mjs ]; then' \
-    '    exec node /opt/openclaw/app/openclaw.mjs "$@"' \
-    'elif [ -f /opt/picoclaw/picoclaw ]; then' \
-    '    exec /opt/picoclaw/picoclaw "$@"' \
-    'else' \
-    '    echo "Error: No upstream application found" >&2' \
-    '    exit 1' \
-    'fi' > /usr/local/bin/upstream.real \
-    && chmod +x /usr/local/bin/upstream.real
-
-# Copy and install the user switching wrapper
-COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/openclaw-wrapper.sh /usr/local/bin/${UPSTREAM}
-RUN chmod +x /usr/local/bin/${UPSTREAM} \
-    && ln -sf /usr/local/bin/${UPSTREAM} /usr/local/bin/upstream
+# Create universal CLI symlink
+RUN ln -sf /usr/local/bin/${UPSTREAM} /usr/local/bin/upstream
 
 # Set up directories with proper permissions
 RUN mkdir -p /data/.${UPSTREAM} /data/workspace /app/config /var/log/${UPSTREAM} \
@@ -294,10 +282,7 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/ /app/scripts/
 COPY --chown=${UPSTREAM}:${UPSTREAM} nginx.conf /etc/nginx/sites-available/${UPSTREAM}
 RUN chmod +x /app/scripts/*.sh \
-    && chmod +x /usr/local/bin/${UPSTREAM} \
-    && ln -s /etc/nginx/sites-available/${UPSTREAM} /etc/nginx/sites-enabled/${UPSTREAM} \
-    && cp /usr/local/bin/${UPSTREAM} /usr/local/bin/run-as-${UPSTREAM} \
-    && chmod +x /usr/local/bin/run-as-${UPSTREAM}
+    && ln -s /etc/nginx/sites-available/${UPSTREAM} /etc/nginx/sites-enabled/${UPSTREAM}
 
 # Create health check script
 RUN printf '%s\n' '#!/bin/bash' "curl -f http://localhost:\${PORT:-8080}/healthz || exit 1" > /app/scripts/healthcheck.sh \

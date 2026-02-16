@@ -337,7 +337,7 @@ jobs:
     strategy:
       matrix:
         upstream: [openclaw, picoclaw]
-        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # TODO: Ironclaw smoke-test blocked by entrypoint integration
         # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
@@ -381,9 +381,7 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
-        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
-        # upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -434,9 +432,7 @@ jobs:
       needs.check-pr-status.outputs.can_skip_build == 'true'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
-        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
-        # upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Download artifact from PR run
         uses: actions/download-artifact@v4
@@ -468,9 +464,7 @@ jobs:
       )
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw]
-        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
-        # upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
