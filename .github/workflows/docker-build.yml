@@ -113,8 +113,8 @@ jobs:
           PR_INFO=$(gh pr list \
             --repo "${{ github.repository }}" \
             --state merged \
-            --json number,mergeCommit,headRefName,baseRefOid \
-            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, baseSha: .baseRefOid, headBranch: .headRefName}" | head -1)
+            --json number,mergeCommit,headRefName,headRefOid \
+            --jq ".[] | select(.mergeCommit.oid == \"$COMMIT_SHA\") | {number, headBranch: .headRefName, headSha: .headRefOid}" | head -1)
 
           if [ -z "$PR_INFO" ]; then
             echo "No merged PR found (direct push to main)"
@@ -125,7 +125,7 @@ jobs:
           echo "Found merged PR: $PR_INFO"
           PR_NUM=$(echo "$PR_INFO" | jq -r '.number')
           HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headBranch')
-          BASE_SHA_AT_MERGE=$(echo "$PR_INFO" | jq -r '.baseSha')
+          PR_HEAD_SHA=$(echo "$PR_INFO" | jq -r '.headSha')
 
           WORKFLOW_RUNS=$(gh run list \
             --repo "${{ github.repository }}" \
@@ -156,23 +156,18 @@ jobs:
             exit 0
           fi
 
-          RUN_DETAILS=$(gh run view "$RUN_ID" --repo "${{ github.repository }}" --json baseSha 2>/dev/null || echo "")
-          if [ -z "$RUN_DETAILS" ]; then
-            echo "Could not fetch run details"
-            echo "can_skip_build=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          RUN_HEAD_SHA=$(gh run view "$RUN_ID" --repo "${{ github.repository }}" --json headSha --jq '.headSha')
+          echo "Run head SHA: $RUN_HEAD_SHA"
+          echo "PR head SHA at merge: $PR_HEAD_SHA"
 
-          BASE_SHA_AT_RUN=$(echo "$RUN_DETAILS" | jq -r '.baseSha // empty')
-          echo "Base SHA at run: $BASE_SHA_AT_RUN"
-          echo "Base SHA at merge: $BASE_SHA_AT_MERGE"
-
-          if [ -n "$BASE_SHA_AT_RUN" ] && [ "$BASE_SHA_AT_RUN" = "$BASE_SHA_AT_MERGE" ]; then
-            echo "PR was up-to-date with main during testing"
+          if [ "$RUN_HEAD_SHA" = "$PR_HEAD_SHA" ]; then
+            echo "PR head SHA matches run - code unchanged since test"
             echo "can_skip_build=true" >> $GITHUB_OUTPUT
             echo "pr_run_id=$RUN_ID" >> $GITHUB_OUTPUT
           else
-            echo "PR was NOT up-to-date with main during testing"
+            echo "PR was updated after testing (head SHA mismatch)"
+            echo "  Run head: $RUN_HEAD_SHA"
+            echo "  PR head: $PR_HEAD_SHA"
             echo "can_skip_build=false" >> $GITHUB_OUTPUT
           fi
 
