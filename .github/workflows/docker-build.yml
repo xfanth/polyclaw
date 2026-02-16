@@ -209,19 +209,26 @@ jobs:
       - name: Determine version and tags
         id: determine-version
         run: |
+          UPSTREAM="${{ matrix.upstream }}"
+
+          # Determine xfanth/openclaw repo tag
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            XFANTH_TAG="xfanth_${{ github.ref_name }}"
+          else
+            XFANTH_TAG="xfanth_main"
+          fi
+
+          # Determine upstream version tag
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if [ "${{ matrix.upstream }}" = "openclaw" ]; then
+            if [ "$UPSTREAM" = "openclaw" ]; then
               LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name')
               if [ "$LATEST_TAG" != "null" ] && [ -n "$LATEST_TAG" ]; then
-                echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-                echo "tags=$LATEST_TAG,latest" >> $GITHUB_OUTPUT
+                UPSTREAM_TAG="openclaw_$LATEST_TAG"
               else
-                echo "version=main" >> $GITHUB_OUTPUT
-                echo "tags=main,latest" >> $GITHUB_OUTPUT
+                UPSTREAM_TAG="openclaw_main"
               fi
             else
-              echo "version=pc_main" >> $GITHUB_OUTPUT
-              echo "tags=pc_main" >> $GITHUB_OUTPUT
+              UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           else
             BASE_COMMIT="${{ github.event.before }}"
@@ -238,17 +245,23 @@ jobs:
               if [ -z "$TAG" ]; then
                 TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
               fi
-              echo "version=$TAG" >> $GITHUB_OUTPUT
-              echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
+              if [ -n "$TAG" ] && [ "$TAG" != "null" ]; then
+                UPSTREAM_TAG="${UPSTREAM}_$TAG"
+              else
+                UPSTREAM_TAG="${UPSTREAM}_main"
+              fi
             elif [ "$MAIN_CHANGED" = "true" ]; then
-              echo "version=oc_main" >> $GITHUB_OUTPUT
-              echo "tags=oc_main" >> $GITHUB_OUTPUT
+              UPSTREAM_TAG="${UPSTREAM}_main"
             else
-              echo "version=main" >> $GITHUB_OUTPUT
-              echo "tags=main,latest" >> $GITHUB_OUTPUT
+              UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           fi
-          echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+
+          # Combine tags: xfanth tag + upstream tag
+          echo "version=$XFANTH_TAG" >> $GITHUB_OUTPUT
+          echo "tags=$XFANTH_TAG,$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+          echo "xfanth_tag=$XFANTH_TAG" >> $GITHUB_OUTPUT
+          echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -262,11 +275,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=raw,value=${{ steps.determine-version.outputs.version }}
-            type=raw,value=latest,enable=${{ steps.determine-version.outputs.should_tag_latest == 'true' }}
-            type=sha,prefix=,suffix=,format=short
+            type=raw,value=${{ steps.determine-version.outputs.xfanth_tag }}
+            type=raw,value=${{ steps.determine-version.outputs.upstream_tag }}
           labels: |
             org.opencontainers.image.title=${{ matrix.upstream }}
             org.opencontainers.image.description=Self-hosted AI agent gateway
@@ -463,19 +473,26 @@ jobs:
       - name: Determine version and tags
         id: determine-version
         run: |
+          UPSTREAM="${{ matrix.upstream }}"
+
+          # Determine xfanth/openclaw repo tag
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            XFANTH_TAG="xfanth_${{ github.ref_name }}"
+          else
+            XFANTH_TAG="xfanth_main"
+          fi
+
+          # Determine upstream version tag
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if [ "${{ matrix.upstream }}" = "openclaw" ]; then
+            if [ "$UPSTREAM" = "openclaw" ]; then
               LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name')
               if [ "$LATEST_TAG" != "null" ] && [ -n "$LATEST_TAG" ]; then
-                echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-                echo "tags=$LATEST_TAG,latest" >> $GITHUB_OUTPUT
+                UPSTREAM_TAG="openclaw_$LATEST_TAG"
               else
-                echo "version=main" >> $GITHUB_OUTPUT
-                echo "tags=main,latest" >> $GITHUB_OUTPUT
+                UPSTREAM_TAG="openclaw_main"
               fi
             else
-              echo "version=pc_main" >> $GITHUB_OUTPUT
-              echo "tags=pc_main" >> $GITHUB_OUTPUT
+              UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           else
             BASE_COMMIT="${{ github.event.before }}"
@@ -492,17 +509,23 @@ jobs:
               if [ -z "$TAG" ]; then
                 TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
               fi
-              echo "version=$TAG" >> $GITHUB_OUTPUT
-              echo "tags=$TAG,latest" >> $GITHUB_OUTPUT
+              if [ -n "$TAG" ] && [ "$TAG" != "null" ]; then
+                UPSTREAM_TAG="${UPSTREAM}_$TAG"
+              else
+                UPSTREAM_TAG="${UPSTREAM}_main"
+              fi
             elif [ "$MAIN_CHANGED" = "true" ]; then
-              echo "version=oc_main" >> $GITHUB_OUTPUT
-              echo "tags=oc_main" >> $GITHUB_OUTPUT
+              UPSTREAM_TAG="${UPSTREAM}_main"
             else
-              echo "version=main" >> $GITHUB_OUTPUT
-              echo "tags=main,latest" >> $GITHUB_OUTPUT
+              UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           fi
-          echo "should_tag_latest=true" >> $GITHUB_OUTPUT
+
+          # Combine tags: xfanth tag + upstream tag
+          echo "version=$XFANTH_TAG" >> $GITHUB_OUTPUT
+          echo "tags=$XFANTH_TAG,$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+          echo "xfanth_tag=$XFANTH_TAG" >> $GITHUB_OUTPUT
+          echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
 
       - name: Load and push image
         run: |
