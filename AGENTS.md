@@ -143,3 +143,7 @@ git branch -d feature/description-of-change
 - Use `make help` to see available commands
 - The Makefile contains many common operations
 - **Docker image builds are done by GitHub Actions** - do not build locally
+
+## Docker Entrypoint Environment Variables
+
+When adding new environment variables to `scripts/configure.js`, you **must** also add them to the `--whitelist-environment` list in `scripts/entrypoint.sh` (around line 81). The entrypoint runs as root, then switches to the upstream user via `su` - only whitelisted env vars survive this switch. See MEMORY.md for the current whitelist.
