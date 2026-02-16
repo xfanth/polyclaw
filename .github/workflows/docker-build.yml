@@ -183,7 +183,9 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
         include:
           - upstream: openclaw
             github_owner: openclaw
@@ -191,9 +193,9 @@ jobs:
           - upstream: picoclaw
             github_owner: sipeed
             github_repo: picoclaw
-          - upstream: ironclaw
-            github_owner: nearai
-            github_repo: ironclaw
+          # - upstream: ironclaw
+          #   github_owner: nearai
+          #   github_repo: ironclaw
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
       upstream_version: ${{ steps.determine-version.outputs.version }}
@@ -306,7 +308,9 @@ jobs:
     if: always() && needs.build.result == 'success'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -345,7 +349,9 @@ jobs:
     if: always() && needs.build.result == 'success'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -387,7 +393,9 @@ jobs:
       needs.check-pr-status.outputs.can_skip_build == 'true'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Download artifact from PR run
         uses: actions/download-artifact@v4
@@ -419,7 +427,9 @@ jobs:
       )
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw]
+        # TODO: Uncomment when PR #36 (ironclaw integration) is merged
+        # upstream: [openclaw, picoclaw, ironclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
