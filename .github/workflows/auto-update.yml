@@ -32,7 +32,7 @@ jobs:
   # ===========================================================================
   check-update:
     name: Check for OpenClaw Updates
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
 
     outputs:
       tagged_has_update: ${{ steps.check.outputs.tagged_has_update }}
@@ -117,7 +117,7 @@ jobs:
   # ===========================================================================
   create-tagged-pr:
     name: Create Tagged Version PR
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: check-update
     if: needs.check-update.outputs.tagged_has_update == 'true'
 
@@ -203,7 +203,7 @@ jobs:
   # ===========================================================================
   create-main-pr:
     name: Create Main Branch PR
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: check-update
     if: needs.check-update.outputs.main_has_update == 'true'
 
