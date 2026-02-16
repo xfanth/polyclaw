@@ -135,6 +135,24 @@ jobs:
           token: ${{ secrets.WORKFLOW_TOKEN }}
 
       # -----------------------------------------------------------------------
+      # Close existing tagged version PRs (superseded by this update)
+      # -----------------------------------------------------------------------
+      - name: Close existing tagged version PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          echo "Checking for existing tagged version PRs..."
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("auto-update/v")) | .number')
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              echo "Closing superseded PR #$PR_NUM"
+              gh pr close "$PR_NUM" --comment "Superseded by new tagged version update PR"
+            done
+          else
+            echo "No existing tagged version PRs to close"
+          fi
+
+      # -----------------------------------------------------------------------
       # Update version files and create PR
       # -----------------------------------------------------------------------
       - name: Update tagged version files
@@ -201,6 +219,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # Close existing main branch PRs (superseded by this update)
+      # -----------------------------------------------------------------------
+      - name: Close existing main branch PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          echo "Checking for existing main branch PRs..."
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("auto-update/oc_main-")) | .number')
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              echo "Closing superseded PR #$PR_NUM"
+              gh pr close "$PR_NUM" --comment "Superseded by newer main branch update PR"
+            done
+          else
+            echo "No existing main branch PRs to close"
+          fi
 
       # -----------------------------------------------------------------------
       # Update main commit file and create PR
