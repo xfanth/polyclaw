@@ -495,6 +495,17 @@ elif echo "$SUPERVISOR_STATUS" | grep "${UPSTREAM}" | grep -q "FATAL\|EXITED\|BA
     # Show recent error logs
     log_info "Recent error logs:"
     docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/var/log/supervisor/${UPSTREAM}-error.log" 2>/dev/null | tail -20 || true
+
+    # For compiled binaries, try running the gateway manually to see the actual error
+    if [ "$IS_NODEJS_UPSTREAM" = false ]; then
+        log_info "Attempting to run ${UPSTREAM} gateway manually to capture error..."
+        docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} /opt/${UPSTREAM}/${UPSTREAM} gateway --port 18789 --bind loopback" 2>&1 | head -100 || true
+    fi
+
+    # Show state directory contents
+    log_info "State directory contents:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "/data/.${UPSTREAM}/" 2>/dev/null || true
+
     TESTS_FAILED=$((TESTS_FAILED + 1))
 else
     log_warn "Could not determine ${UPSTREAM} process status"
