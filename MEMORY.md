@@ -155,6 +155,36 @@ XIAOMI_API_KEY
 
 When adding new env vars to `configure.js`, **always add them to the whitelist** in `entrypoint.sh`.
 
+## Repository and Package Naming
+
+- **Repository**: `xfanth/polyclaw` (formerly `xfanth/openclaw`)
+- **Docker Images**: `ghcr.io/xfanth/{upstream}` where upstream is `openclaw`, `picoclaw`, or `ironclaw`
+- **Image tags**: `xfanth_main`, `oc_main`, `pc_main`, `ic_main`, or version tags like `v2026.2.1`
+
+When renaming a repository:
+1. Update README.md badge URLs
+2. Update workflow IMAGE_NAME references to use hardcoded `ghcr.io/xfanth/{upstream}`
+3. Update local git remote: `git remote set-url origin git@github.com:xfanth/polyclaw.git`
+4. **CodeQL Default Setup**: After renaming, disable and re-enable CodeQL in repository settings to clear cached database with old path
+   - Go to Settings → Security → Code Security
+   - Disable CodeQL, then re-enable it
+   - Otherwise builds fail with "Invalid working directory: /home/runner/work/openclaw/openclaw"
+
+## Hadolint Configuration
+
+The Dockerfile uses a retry pattern for apt-get commands:
+```dockerfile
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y ... && \
+        rm -rf /var/lib/apt/lists/* && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
+```
+
+This triggers hadolint SC2015 warning (`A && B || C is not if-then-else`). The pattern is intentional for retry logic, so we ignore SC2015 in `.hadolint.yaml`.
+
 ## Available Tools
 
 The following tools are available:

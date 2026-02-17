@@ -138,11 +138,18 @@ git branch -d feature/description-of-change
 
 ## Project-Specific Notes
 
-- This is a Docker-based project for OpenClaw
+- **Repository**: `xfanth/polyclaw` on GitHub
+- This is a Docker-based project for AI agent gateways
 - Configuration is managed through `.env` files
 - Use `make help` to see available commands
 - The Makefile contains many common operations
 - **Docker image builds are done by GitHub Actions** - do not build locally
+
+## Hadolint/Dockerfile
+
+- The Dockerfile uses a retry pattern for apt-get that triggers SC2015 warning
+- This is intentional - do not "fix" the pattern
+- If adding similar retry logic, the `.hadolint.yaml` already ignores SC2015
 
 ## Supported Upstreams
 
