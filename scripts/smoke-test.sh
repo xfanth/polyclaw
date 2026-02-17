@@ -280,23 +280,46 @@ else
 fi
 
 # =============================================================================
-# Test 8: Gateway Process Running
+# Test 8: Gateway Process Running (via supervisorctl)
 # =============================================================================
 log_info "Test 8: Verifying ${UPSTREAM} gateway process is running..."
 
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" pgrep -f "$UPSTREAM" > /dev/null 2>&1; then
-    log_success "${UPSTREAM} gateway process is running"
+# First check supervisorctl status (use -s to specify socket path)
+SUPERVISOR_STATUS=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" supervisorctl -s unix:///tmp/supervisor.sock status 2>/dev/null || \
+                    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" supervisorctl status 2>/dev/null || \
+                    echo "supervisor not responding")
+
+if echo "$SUPERVISOR_STATUS" | grep -E "^${UPSTREAM}\s+RUNNING" > /dev/null 2>&1; then
+    log_success "${UPSTREAM} gateway process is RUNNING"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "${UPSTREAM} gateway process not found!"
-    log_info "Processes in container:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ps aux 2>/dev/null || true
+    # Gateway is not running - get detailed diagnostics
+    log_error "${UPSTREAM} gateway process is NOT running!"
     log_info "Supervisor status:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" supervisorctl status 2>/dev/null || true
+    echo "$SUPERVISOR_STATUS"
+
+    # Check supervisor logs for crash info
+    log_info "Supervisor logs:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/var/log/supervisor/supervisord.log" 2>/dev/null | tail -30 || true
+
+    # Check gateway error logs
     log_info "Gateway error logs:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/var/log/supervisor/${UPSTREAM}-error.log" 2>/dev/null | tail -50 || true
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/var/log/supervisor/${UPSTREAM}-error.log" 2>/dev/null | tail -30 || true
+
+    # Check gateway stdout logs
     log_info "Gateway stdout logs:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/var/log/supervisor/${UPSTREAM}.log" 2>/dev/null | tail -50 || true
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/var/log/supervisor/${UPSTREAM}.log" 2>/dev/null | tail -30 || true
+
+    # For compiled binaries, run the gateway manually to see the actual error
+    if [ "$IS_NODEJS_UPSTREAM" = false ]; then
+        log_info "Running ${UPSTREAM} gateway manually to capture error..."
+        docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} /opt/${UPSTREAM}/${UPSTREAM} gateway --port 18789 --bind loopback 2>&1" 2>&1 | head -50 || true
+    fi
+
+    # Show state directory contents
+    log_info "State directory contents:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "/data/.${UPSTREAM}/" 2>/dev/null || true
+
     TESTS_FAILED=$((TESTS_FAILED + 1))
     exit 1
 fi

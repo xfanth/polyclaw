@@ -424,6 +424,13 @@ user=$UPSTREAM
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/tmp/supervisord.pid
 
+[unix_http_server]
+file=/tmp/supervisor.sock
+chmod=0700
+
+[supervisorctl]
+serverurl=unix:///tmp/supervisor.sock
+
 [program:nginx]
 command=nginx -g "daemon off;"
 autostart=true
