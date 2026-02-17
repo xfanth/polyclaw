@@ -17,7 +17,6 @@ services:
     image: ${UPSTREAM:-openclaw}:smoke-test
     container_name: ${UPSTREAM:-openclaw}-smoke-test
     environment:
-      - UPSTREAM=${UPSTREAM:-openclaw}
       - OPENCLAW_GATEWAY_TOKEN=test-token-smoke-test
       - OPENROUTER_API_KEY=sk-or-test-key
       - AUTH_PASSWORD=testpass

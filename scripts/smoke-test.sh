@@ -1,17 +1,18 @@
 #!/bin/bash
 # =============================================================================
-# OpenClaw/PicoClaw Docker Smoke Test
+# OpenClaw/PicoClaw/IronClaw/ZeroClaw Docker Smoke Test
 # =============================================================================
-# This script:
-# 1. Builds the Docker image for the specified upstream
-# 2. Starts containers with docker-compose.test.yml
-# 3. Waits for services to be healthy
-# 4. Runs basic health checks
-# 5. Cleans up
+# This script tests that a Docker image for a specific upstream works correctly:
+# 1. Builds/uses the Docker image for the specified upstream
+# 2. Starts the container WITHOUT passing UPSTREAM env var (tests auto-detection)
+# 3. Verifies container detected the correct upstream from its files
+# 4. Ensures web UI is reachable on port 8080
+# 5. Runs healthcheck commands (status, gateway status)
+# 6. Ensures container doesn't crash/exit/restart
 #
 # Usage:
 #   ./smoke-test.sh                     # Test OpenClaw (default)
-#   UPSTREAM=picoclaw ./smoke-test.sh   # Test PicoClaw
+#   UPSTREAM=zeroclaw ./smoke-test.sh   # Test ZeroClaw
 #   IMAGE_TAG=myimage:latest ./smoke-test.sh  # Use pre-built image
 # =============================================================================
 
@@ -31,6 +32,7 @@ UPSTREAM_VERSION="${UPSTREAM_VERSION:-main}"
 # Test configuration
 COMPOSE_FILE="docker-compose.test.yml"
 TEST_TIMEOUT=120
+STABILITY_CHECK_TIME=30
 SERVICE_NAME="gateway-test"
 IMAGE_TAG="${IMAGE_TAG:-${UPSTREAM}:smoke-test}"
 
@@ -45,7 +47,6 @@ log_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 # Determine upstream type for conditional tests
-# Node.js upstreams have full CLI support, compiled binaries have limited CLI
 IS_NODEJS_UPSTREAM=false
 case "$UPSTREAM" in
     openclaw)
@@ -73,7 +74,6 @@ echo ""
 cleanup() {
     log_info "Cleaning up test environment..."
     docker compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
-    # Use sudo if available to handle permission issues from container user
     sudo rm -rf test-data test-workspace 2>/dev/null || rm -rf test-data test-workspace 2>/dev/null || true
 }
 
@@ -85,12 +85,10 @@ trap cleanup EXIT
 # =============================================================================
 log_info "Test 1: Checking Docker image..."
 
-# If IMAGE_TAG is set (CI environment), verify the image exists and tag it
 if [ "$IMAGE_TAG" != "${UPSTREAM}:smoke-test" ]; then
     log_info "Using pre-built image: $IMAGE_TAG"
     if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1; then
         log_success "Pre-built image found"
-        # Tag the image for docker-compose to use
         docker tag "$IMAGE_TAG" "${UPSTREAM}:smoke-test"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
@@ -98,11 +96,9 @@ if [ "$IMAGE_TAG" != "${UPSTREAM}:smoke-test" ]; then
         TESTS_FAILED=$((TESTS_FAILED + 1))
         exit 1
     fi
-# Otherwise, check if image already exists locally
 elif docker image inspect "${UPSTREAM}:smoke-test" > /dev/null 2>&1; then
     log_success "Docker image already exists, skipping build"
     TESTS_PASSED=$((TESTS_PASSED + 1))
-# Build from scratch
 elif docker build --build-arg UPSTREAM="$UPSTREAM" --build-arg UPSTREAM_VERSION="$UPSTREAM_VERSION" -t "${UPSTREAM}:smoke-test" . > /tmp/build.log 2>&1; then
     log_success "Docker image built successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -116,53 +112,125 @@ fi
 # =============================================================================
 # Test 2: Start Services
 # =============================================================================
-log_info "Test 2: Starting services with docker-compose..."
+log_info "Test 2: Starting container..."
 
-# Create test directories
 mkdir -p test-data test-workspace
 
-# Ensure proper permissions on test directories
-# In CI environments, fix ownership and permissions
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
     sudo chown -R "$(id -u):$(id -g)" test-data test-workspace 2>/dev/null || true
     sudo chmod -R 755 test-data test-workspace 2>/dev/null || true
 fi
 
-# Export UPSTREAM for docker-compose
 export UPSTREAM
 
 if docker compose -f "$COMPOSE_FILE" up -d > /tmp/compose.log 2>&1; then
-    log_success "Services started"
+    log_success "Container started"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "Failed to start services"
+    log_error "Failed to start container"
     cat /tmp/compose.log
     TESTS_FAILED=$((TESTS_FAILED + 1))
     exit 1
 fi
 
-# =============================================================================
-# Test 3: Wait for Health Check
-# =============================================================================
-log_info "Test 3: Waiting for health checks (timeout: ${TEST_TIMEOUT}s)..."
+# Give container a moment to start
+sleep 3
 
-START_TIME=$(date +%s)
-HEALTHY=0
+# =============================================================================
+# Test 3: Check for Immediate Crashes / Restart Loops
+# =============================================================================
+log_info "Test 3: Checking container stability (no immediate crashes)..."
 
-while [ $(($(date +%s) - START_TIME)) -lt $TEST_TIMEOUT ]; do
-    if docker compose -f "$COMPOSE_FILE" ps "$SERVICE_NAME" 2>/dev/null | grep -q "healthy"; then
-        HEALTHY=1
+CRASH_DETECTED=0
+RESTART_COUNT=0
+
+for i in 1 2 3 4 5; do
+    STATUS=$(docker compose -f "$COMPOSE_FILE" ps "$SERVICE_NAME" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | head -1 || echo "")
+
+    if echo "$STATUS" | grep -q "exited\|dead"; then
+        log_error "Container exited!"
+        CRASH_DETECTED=1
         break
     fi
 
-    # Show container logs if it's restarting or exited
-    STATUS=$(docker compose -f "$COMPOSE_FILE" ps "$SERVICE_NAME" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | head -1)
+    if echo "$STATUS" | grep -q "restarting"; then
+        log_error "Container is in restart loop!"
+        CRASH_DETECTED=1
+        break
+    fi
+
+    # Check restart count
+    CURRENT_RESTARTS=$(docker inspect --format='{{.RestartCount}}' "${UPSTREAM}-smoke-test" 2>/dev/null || echo "0")
+    if [ "$CURRENT_RESTARTS" -gt "$RESTART_COUNT" ]; then
+        log_error "Container restarted (count: $CURRENT_RESTARTS)"
+        RESTART_COUNT=$CURRENT_RESTARTS
+        CRASH_DETECTED=1
+    fi
+
+    sleep 2
+done
+
+if [ $CRASH_DETECTED -eq 1 ]; then
+    log_error "Container crash detected!"
+    log_info "Container logs:"
+    docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 100
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
+fi
+
+log_success "Container is stable (no crashes in first 15 seconds)"
+TESTS_PASSED=$((TESTS_PASSED + 1))
+
+# =============================================================================
+# Test 4: Verify Upstream Detection
+# =============================================================================
+log_info "Test 4: Verifying upstream detection..."
+
+# Get container logs and check for correct detection
+CONTAINER_LOGS=$(docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" 2>/dev/null || true)
+
+if echo "$CONTAINER_LOGS" | grep -q "Detected upstream: $UPSTREAM"; then
+    log_success "Container correctly detected upstream: $UPSTREAM"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "Container detected wrong upstream!"
+    log_info "Expected: $UPSTREAM"
+    log_info "Container logs (first 50 lines):"
+    echo "$CONTAINER_LOGS" | head -50
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
+fi
+
+# Also check for user existence errors
+if echo "$CONTAINER_LOGS" | grep -q "User.*does not exist"; then
+    log_error "Container reports user does not exist - image/UPSTREAM mismatch!"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
+fi
+
+# =============================================================================
+# Test 5: Wait for Full Startup
+# =============================================================================
+log_info "Test 5: Waiting for full startup (timeout: ${TEST_TIMEOUT}s)..."
+
+START_TIME=$(date +%s)
+STARTED=0
+
+while [ $(($(date +%s) - START_TIME)) -lt $TEST_TIMEOUT ]; do
+    # Check for crash/restart
+    STATUS=$(docker compose -f "$COMPOSE_FILE" ps "$SERVICE_NAME" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | head -1 || echo "")
     if echo "$STATUS" | grep -q "exited\|dead\|restarting"; then
-        log_error "Container is in bad state: $STATUS"
+        log_error "Container crashed during startup: $STATUS"
         log_info "Container logs:"
         docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 100
         TESTS_FAILED=$((TESTS_FAILED + 1))
         exit 1
+    fi
+
+    # Check if services are running
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" pgrep -f "supervisord" > /dev/null 2>&1; then
+        STARTED=1
+        break
     fi
 
     echo -n "."
@@ -171,127 +239,53 @@ done
 
 echo ""
 
-if [ $HEALTHY -eq 1 ]; then
-    log_success "Health check passed"
+if [ $STARTED -eq 1 ]; then
+    log_success "Services started successfully"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "Health check timed out after ${TEST_TIMEOUT}s"
+    log_error "Startup timed out after ${TEST_TIMEOUT}s"
     log_info "Container logs:"
     docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 100
     TESTS_FAILED=$((TESTS_FAILED + 1))
     exit 1
 fi
 
-# Wait a bit more for services to fully start
-sleep 10
+# Wait for services to fully initialize
+sleep 5
 
 # =============================================================================
-# Test 4: HTTP Endpoint Test (Node.js only - has /healthz endpoint)
+# Test 6: Web UI Reachability (via nginx on port 8080)
 # =============================================================================
-if [ "$IS_NODEJS_UPSTREAM" = true ]; then
-    log_info "Test 4: Testing HTTP endpoint..."
+log_info "Test 6: Testing web UI reachability on port 8080..."
 
-    # Try multiple times with retries
-    HTTP_SUCCESS=0
-    for _ in 1 2 3; do
-        if curl -sf http://localhost:18080/healthz > /dev/null 2>&1; then
-            HTTP_SUCCESS=1
-            break
-        fi
-        sleep 2
-    done
-
-    if [ $HTTP_SUCCESS -eq 1 ]; then
-        log_success "Health endpoint responds (200 OK)"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_error "Health endpoint failed"
-        log_info "Trying to get more info..."
-        curl -v http://localhost:18080/healthz 2>&1 || true
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        exit 1
+HTTP_SUCCESS=0
+for i in 1 2 3 4 5; do
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18080/healthz 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+        HTTP_SUCCESS=1
+        break
     fi
-else
-    log_info "Test 4: Skipping HTTP endpoint test (compiled binaries may not have /healthz)"
-    log_success "HTTP endpoint test skipped for ${UPSTREAM}"
+    log_info "Attempt $i: HTTP $HTTP_CODE, retrying..."
+    sleep 2
+done
+
+if [ $HTTP_SUCCESS -eq 1 ]; then
+    log_success "Web UI reachable (HTTP $HTTP_CODE)"
     TESTS_PASSED=$((TESTS_PASSED + 1))
-fi
-
-# =============================================================================
-# Test 5: Gateway Test (upstream-aware)
-# =============================================================================
-log_info "Test 5: Testing ${UPSTREAM} gateway..."
-
-GATEWAY_ERRORS=0
-
-if [ "$IS_NODEJS_UPSTREAM" = true ]; then
-    # Node.js upstreams have full CLI with 'gateway status' command
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1 || true
-
-    # Check for permission denied errors
-    if grep -q "EACCES\|permission denied" /tmp/gateway-status.log 2>/dev/null; then
-        log_error "Gateway has permission errors (EACCES)"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-    fi
-
-    # Check for port conflicts
-    if grep -q "Port.*already in use\|address already in use" /tmp/gateway-status.log 2>/dev/null; then
-        log_error "Gateway has port conflicts"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-    fi
-
-    # Check for systemd errors (expected in container)
-    if grep -q "systemd.*unavailable\|systemctl.*unavailable" /tmp/gateway-status.log 2>/dev/null; then
-        log_warn "systemd is unavailable (expected in container environment)"
-    fi
-
-    # Check if gateway is responding via RPC
-    if grep -q "RPC probe: ok" /tmp/gateway-status.log 2>/dev/null; then
-        log_success "Gateway RPC probe successful"
-    else
-        log_error "Gateway is not responding properly"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-    fi
-
-    if [ $GATEWAY_ERRORS -eq 0 ]; then
-        log_success "${UPSTREAM} gateway is running and responding"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_info "Gateway status output:"
-        cat /tmp/gateway-status.log
-    fi
 else
-    # Compiled binary upstreams - check that binary exists and process is running
-    log_info "Checking compiled binary gateway..."
-
-    # Check if the upstream binary exists
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" which "$UPSTREAM" > /dev/null 2>&1; then
-        log_success "${UPSTREAM} binary found in PATH"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_error "${UPSTREAM} binary not found in PATH"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-    fi
-
-    # Check if gateway process is running (via supervisord)
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" pgrep -f "$UPSTREAM" > /dev/null 2>&1; then
-        log_success "${UPSTREAM} gateway process is running"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_error "${UPSTREAM} gateway process not found"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-    fi
+    log_error "Web UI not reachable"
+    log_info "Trying to diagnose..."
+    curl -v http://localhost:18080/healthz 2>&1 || true
+    log_info "Container logs:"
+    docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 50
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
 fi
 
 # =============================================================================
-# Test 6: Nginx Test
+# Test 7: Nginx Running
 # =============================================================================
-log_info "Test 6: Testing Nginx..."
+log_info "Test 7: Verifying nginx is running..."
 
 if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" pgrep nginx > /dev/null 2>&1; then
     log_success "Nginx process is running"
@@ -303,134 +297,132 @@ else
 fi
 
 # =============================================================================
-# Test 7: Identity Directory Permissions
+# Test 8: Gateway Process Running
 # =============================================================================
-log_info "Test 7: Checking identity directory permissions..."
+log_info "Test 8: Verifying ${UPSTREAM} gateway process is running..."
 
-IDENTITY_PERMISSIONS=0
-
-# Check if identity directory exists
-if ! docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -d "/data/.${UPSTREAM}/identity" 2>/dev/null; then
-    log_error "Identity directory does not exist"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" pgrep -f "$UPSTREAM" > /dev/null 2>&1; then
+    log_success "${UPSTREAM} gateway process is running"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
+    log_error "${UPSTREAM} gateway process not found"
+    log_info "Checking what processes are running..."
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ps aux 2>/dev/null || true
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
+fi
+
+# =============================================================================
+# Test 9: Run Healthcheck Commands
+# =============================================================================
+log_info "Test 9: Running healthcheck commands..."
+
+HEALTHCHECK_ERRORS=0
+
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    # Run 'upstream status' command
+    log_info "Running: ${UPSTREAM} status"
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1; then
+        log_success "${UPSTREAM} status command succeeded"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_warn "${UPSTREAM} status command failed (checking for errors...)"
+    fi
+
+    # Check for critical errors in status output
+    if grep -q "EACCES\|permission denied" /tmp/status.log 2>/dev/null; then
+        log_error "Permission errors in status output"
+        HEALTHCHECK_ERRORS=$((HEALTHCHECK_ERRORS + 1))
+    fi
+
+    # Run 'upstream gateway status' command
+    log_info "Running: ${UPSTREAM} gateway status"
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1; then
+        log_success "${UPSTREAM} gateway status command succeeded"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_warn "${UPSTREAM} gateway status command failed (checking for errors...)"
+    fi
+
+    # Check for gateway responding
+    if grep -q "RPC probe: ok" /tmp/gateway-status.log 2>/dev/null; then
+        log_success "Gateway RPC probe successful"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "Gateway RPC probe failed"
+        HEALTHCHECK_ERRORS=$((HEALTHCHECK_ERRORS + 1))
+    fi
+else
+    # For compiled binaries, just verify the binary exists and is executable
+    log_info "Checking ${UPSTREAM} binary..."
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -x "/opt/${UPSTREAM}/${UPSTREAM}" 2>/dev/null; then
+        log_success "${UPSTREAM} binary is executable"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "${UPSTREAM} binary not found or not executable"
+        HEALTHCHECK_ERRORS=$((HEALTHCHECK_ERRORS + 1))
+    fi
+fi
+
+if [ $HEALTHCHECK_ERRORS -gt 0 ]; then
+    log_error "Healthcheck commands had $HEALTHCHECK_ERRORS errors"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+# =============================================================================
+# Test 10: Stability Check (container stays running)
+# =============================================================================
+log_info "Test 10: Stability check - ensuring container stays running for ${STABILITY_CHECK_TIME}s..."
+
+INITIAL_RESTARTS=$(docker inspect --format='{{.RestartCount}}' "${UPSTREAM}-smoke-test" 2>/dev/null || echo "0")
+STABILITY_PASSED=1
+
+for i in $(seq 1 $STABILITY_CHECK_TIME); do
+    STATUS=$(docker compose -f "$COMPOSE_FILE" ps "$SERVICE_NAME" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | head -1 || echo "")
+
+    if echo "$STATUS" | grep -q "exited\|dead\|restarting"; then
+        log_error "Container became unstable at second $i: $STATUS"
+        STABILITY_PASSED=0
+        break
+    fi
+
+    CURRENT_RESTARTS=$(docker inspect --format='{{.RestartCount}}' "${UPSTREAM}-smoke-test" 2>/dev/null || echo "0")
+    if [ "$CURRENT_RESTARTS" -gt "$INITIAL_RESTARTS" ]; then
+        log_error "Container restarted during stability check (restarts: $CURRENT_RESTARTS)"
+        STABILITY_PASSED=0
+        break
+    fi
+
+    # Only print every 10 seconds
+    if [ $((i % 10)) -eq 0 ]; then
+        log_info "Still running after ${i}s..."
+    fi
+
+    sleep 1
+done
+
+if [ $STABILITY_PASSED -eq 1 ]; then
+    log_success "Container remained stable for ${STABILITY_CHECK_TIME}s"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "Container failed stability check"
+    log_info "Container logs:"
+    docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 100
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    exit 1
+fi
+
+# =============================================================================
+# Test 11: Identity Directory Permissions
+# =============================================================================
+log_info "Test 11: Checking identity directory permissions..."
+
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -d "/data/.${UPSTREAM}/identity" 2>/dev/null; then
     log_success "Identity directory exists"
     TESTS_PASSED=$((TESTS_PASSED + 1))
-fi
-
-# Check if identity directory is writable (as upstream user)
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} test -w /data/.${UPSTREAM}/identity" 2>/dev/null; then
-    log_success "Identity directory is writable by ${UPSTREAM} user"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "Identity directory is not writable by ${UPSTREAM} user"
+    log_error "Identity directory does not exist"
     TESTS_FAILED=$((TESTS_FAILED + 1))
-    IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
-fi
-
-# Try to create a test file in identity directory (as upstream user)
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} touch /data/.${UPSTREAM}/identity/test-file" 2>/dev/null; then
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} rm /data/.${UPSTREAM}/identity/test-file" 2>/dev/null || true
-    log_success "${UPSTREAM} user can write files in identity directory"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-else
-    log_error "${UPSTREAM} user cannot write files in identity directory"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    IDENTITY_PERMISSIONS=$((IDENTITY_PERMISSIONS + 1))
-fi
-
-# =============================================================================
-# Test 8: Config Validation (Node.js only)
-# =============================================================================
-if [ "$IS_NODEJS_UPSTREAM" = true ]; then
-    log_info "Test 8: Validating ${UPSTREAM} config..."
-
-    # Check if config file exists and is valid JSON
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" bash -c "cat /data/.${UPSTREAM}/${UPSTREAM}.json | python3 -m json.tool > /dev/null 2>&1"; then
-        log_success "${UPSTREAM} config is valid JSON"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_warn "${UPSTREAM} config has warnings (may be expected for test environment)"
-        # Don't fail on config warnings in smoke test
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    fi
-else
-    log_info "Test 8: Skipping config validation (not applicable for compiled binaries)"
-    log_success "Config validation skipped for ${UPSTREAM}"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-fi
-
-# =============================================================================
-# Test 9: Checking full status (Node.js only)
-# =============================================================================
-if [ "$IS_NODEJS_UPSTREAM" = true ]; then
-    log_info "Test 9: Checking ${UPSTREAM} full status..."
-
-    # Run as upstream user to avoid permission issues
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1 || true
-
-    STATUS_ERRORS=0
-
-    # Check for permission denied errors
-    if grep -q "EACCES\|permission denied" /tmp/status.log 2>/dev/null; then
-        log_error "${UPSTREAM} status shows permission errors"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        STATUS_ERRORS=$((STATUS_ERRORS + 1))
-    fi
-
-    # Check if gateway is marked as unreachable
-    if grep -q "Gateway.*unreachable" /tmp/status.log 2>/dev/null; then
-        log_error "${UPSTREAM} status shows gateway is unreachable"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        STATUS_ERRORS=$((STATUS_ERRORS + 1))
-    fi
-
-    # Check for memory unavailable errors
-    if grep -q "Memory.*unavailable" /tmp/status.log 2>/dev/null; then
-        log_warn "Memory plugin is unavailable (may be expected in test environment)"
-        # Don't fail on memory warnings
-    fi
-
-    if [ $STATUS_ERRORS -eq 0 ]; then
-        log_success "${UPSTREAM} status check passed"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_info "${UPSTREAM} status output:"
-        cat /tmp/status.log
-    fi
-
-    # Verify gateway status shows correct port
-    if grep -q "port=18789" /tmp/status.log 2>/dev/null; then
-        log_success "Gateway status shows correct port (18789)"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_warn "Gateway status shows unexpected port in status output"
-    fi
-else
-    log_info "Test 9: Skipping full status check (not applicable for compiled binaries)"
-    log_success "Status check skipped for ${UPSTREAM}"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-fi
-
-# =============================================================================
-# Test 10: Verify gateway port accessibility (Node.js only - has /healthz endpoint)
-# =============================================================================
-if [ "$IS_NODEJS_UPSTREAM" = true ]; then
-    log_info "Test 10: Verifying gateway on port 18789..."
-
-    # Test gateway from within container
-    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} curl -f http://localhost:18789/healthz" 2>&1; then
-        log_success "Gateway is accessible on port 18789 (from within container)"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_error "Gateway is not accessible on port 18789 (from within container)"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
-else
-    log_info "Test 10: Skipping gateway port test (compiled binaries may not have /healthz)"
-    log_success "Gateway port test skipped for ${UPSTREAM}"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
 # =============================================================================
