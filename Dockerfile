@@ -80,18 +80,19 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
 
 # Patch upstream TypeScript errors (OpenClaw/IronClaw only)
 # These patches fix type errors in upstream code that breaks the build
+# Using @ts-ignore instead of @ts-expect-error so patches work regardless of upstream state
 RUN if [ "${UPSTREAM}" != "picoclaw" ]; then \
         set -eux; \
         if [ -f src/channels/plugins/actions/telegram.ts ]; then \
-            sed -i '237a\        // @ts-expect-error poll action not in type union' src/channels/plugins/actions/telegram.ts; \
+            sed -i '237a\        // @ts-ignore poll action not in type union' src/channels/plugins/actions/telegram.ts; \
         fi; \
         if [ -f src/web/inbound/send-api.ts ]; then \
             sed -i -E '/^\s*linkPreview:/d' src/web/inbound/send-api.ts; \
             sed -i -E 's/,\s*linkPreview:\s*[^,}\n]+//g' src/web/inbound/send-api.ts; \
         fi; \
         if [ -f src/agents/tool-loop-detection.ts ]; then \
-            sed -i '60a\        // @ts-expect-error value may be undefined' src/agents/tool-loop-detection.ts; \
-            sed -i '57a\            // @ts-expect-error value may be undefined' src/agents/tool-loop-detection.ts; \
+            sed -i '60a\        // @ts-ignore value may be undefined' src/agents/tool-loop-detection.ts; \
+            sed -i '57a\            // @ts-ignore value may be undefined' src/agents/tool-loop-detection.ts; \
         fi; \
     fi
 
