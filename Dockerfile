@@ -25,17 +25,21 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG UPSTREAM=openclaw
 ARG UPSTREAM_VERSION=main
 
-# Install build dependencies
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        git \
-        ca-certificates \
-        curl \
-        python3 \
-        make \
-        g++ \
-        pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+# Install build dependencies with retry logic for transient network issues
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --fix-missing \
+            git \
+            ca-certificates \
+            curl \
+            python3 \
+            make \
+            g++ \
+            pkg-config && \
+        rm -rf /var/lib/apt/lists/* && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
 # Install Go 1.25.7 from official distribution
 RUN curl -fsSL "https://go.dev/dl/go1.25.7.linux-amd64.tar.gz" -o go.tar.gz \
@@ -147,49 +151,44 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_ENV=production
 
 # Install runtime dependencies including nginx for reverse proxy
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        # Core utilities
-        ca-certificates \
-        curl \
-        wget \
-        git \
-        # Security
-        openssl \
-        # Process management
-        procps \
-        supervisor \
-        # Text editors and tools
-        neovim \
-        vim-tiny \
-        nano \
-        # Build tools (for native modules)
-        build-essential \
-        python3 \
-        make \
-        g++ \
-        pkg-config \
-        # File utilities
-        file \
-        # Network tools
-        net-tools \
-        iputils-ping \
-        dnsutils \
-        # System utilities
-        sudo \
-        htop \
-        # Nginx for reverse proxy
-        nginx \
-        apache2-utils \
-        # Additional useful packages
-        jq \
-        unzip \
-        zip \
-        rsync \
-        cron \
-        logrotate \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+# Uses retry logic to handle transient Debian mirror sync issues
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends --fix-missing \
+            ca-certificates \
+            curl \
+            wget \
+            git \
+            openssl \
+            procps \
+            supervisor \
+            neovim \
+            vim-tiny \
+            nano \
+            build-essential \
+            python3 \
+            make \
+            g++ \
+            pkg-config \
+            file \
+            net-tools \
+            iputils-ping \
+            dnsutils \
+            sudo \
+            htop \
+            nginx \
+            apache2-utils \
+            jq \
+            unzip \
+            zip \
+            rsync \
+            cron \
+            logrotate && \
+        rm -rf /var/lib/apt/lists/* && \
+        apt-get clean && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
 # Install Homebrew (Linuxbrew) for additional package management
 RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
@@ -202,15 +201,19 @@ RUN curl -fsSL https://bun.sh/install | bash \
 # Install npm via Node.js and enable corepack for pnpm and yarn
 RUN npm install -g npm@11.10.0 && npm install -g corepack@0.34.6 --force && corepack enable
 
-# Install GitHub CLI
+# Install GitHub CLI with retry logic
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
+    && for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends --fix-missing gh && \
+        rm -rf /var/lib/apt/lists/* && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
-# Install 1Password CLI
+# Install 1Password CLI with retry logic
 RUN ARCH=$(dpkg --print-architecture) \
     && curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg \
     && echo "deb [arch=${ARCH} signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/${ARCH} stable main" | tee /etc/apt/sources.list.d/1password.list \
@@ -218,9 +221,13 @@ RUN ARCH=$(dpkg --print-architecture) \
     && curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | tee /etc/debsig/policies/AC2D62742012EA22/1password.pol \
     && mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 \
     && curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends 1password-cli \
-    && rm -rf /var/lib/apt/lists/*
+    && for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends --fix-missing 1password-cli && \
+        rm -rf /var/lib/apt/lists/* && \
+        break || \
+        (echo "Retry $i failed, waiting 10 seconds..." && sleep 10); \
+    done
 
 # Create non-root user for running the application
 # Use high UID/GID to avoid conflicts with existing users in base image
