@@ -116,9 +116,19 @@ function buildConfig() {
     }
 
     // Control UI
-    config.gateway.controlUi = {
-        allowedOrigins: parseList(process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || '*')
-    };
+    config.gateway.controlUi = {};
+
+    const allowedOriginsValue = process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || '';
+    if (allowedOriginsValue && allowedOriginsValue !== '*') {
+        config.gateway.controlUi.allowedOrigins = parseList(allowedOriginsValue);
+    } else if (allowedOriginsValue === '*') {
+        console.log('[configure] WARNING: OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=* does not work as a wildcard in openclaw.');
+        console.log('[configure] Specify exact origins like: http://hostname:port,http://otherhost:port');
+    }
+
+    if (process.env.OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH === 'true') {
+        config.gateway.controlUi.allowInsecureAuth = true;
+    }
 
     // Browser - at root level, not under tools
     if (process.env.BROWSER_CDP_URL) {
