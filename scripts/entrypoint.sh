@@ -32,20 +32,29 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 detect_upstream() {
     if [ -f /opt/openclaw/app/openclaw.mjs ]; then
         echo "openclaw"
-    elif [ -f /opt/picoclaw/app/picoclaw.mjs ]; then
-        echo "picoclaw"
     elif [ -f /opt/zeroclaw/zeroclaw ]; then
         echo "zeroclaw"
+    elif [ -f /opt/ironclaw/ironclaw ]; then
+        echo "ironclaw"
+    elif [ -f /opt/picoclaw/app/picoclaw.mjs ]; then
+        echo "picoclaw"
     elif [ -f /opt/picoclaw/picoclaw ]; then
         echo "picoclaw"
     else
         log_error "No upstream application found!"
-        log_error "Expected one of: /opt/openclaw/app/openclaw.mjs, /opt/picoclaw/picoclaw, or /opt/zeroclaw/zeroclaw"
+        log_error "Expected one of: /opt/openclaw/app/openclaw.mjs, /opt/picoclaw/picoclaw, /opt/ironclaw/ironclaw, or /opt/zeroclaw/zeroclaw"
         exit 1
     fi
 }
 
-UPSTREAM="${UPSTREAM:-$(detect_upstream)}"
+DETECTED_UPSTREAM=$(detect_upstream)
+
+if [ -n "${UPSTREAM:-}" ] && [ "$UPSTREAM" != "$DETECTED_UPSTREAM" ]; then
+    log_warn "UPSTREAM env var ($UPSTREAM) doesn't match detected upstream ($DETECTED_UPSTREAM)"
+    log_warn "Using detected upstream: $DETECTED_UPSTREAM"
+fi
+
+UPSTREAM="$DETECTED_UPSTREAM"
 log_info "Detected upstream: $UPSTREAM"
 
 # Set upstream-specific paths
