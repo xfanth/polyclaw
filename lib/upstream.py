@@ -16,6 +16,7 @@ class UpstreamType(str, Enum):
     OPENCLAW = "openclaw"
     PICOCLAW = "picoclaw"
     IRONCLAW = "ironclaw"
+    ZEROCLAW = "zeroclaw"
 
     @classmethod
     def from_string(cls, value: str) -> Self:
@@ -92,6 +93,16 @@ UPSTREAMS: dict[UpstreamType, UpstreamConfig] = {
         app_directory="/opt/ironclaw/app",
         mjs_entrypoint="ironclaw.mjs",
     ),
+    UpstreamType.ZEROCLAW: UpstreamConfig(
+        name=UpstreamType.ZEROCLAW,
+        github_owner="zeroclaw-labs",
+        github_repo="zeroclaw",
+        default_branch="main",
+        description="ZeroClaw - 100% Rust, zero overhead AI agent gateway",
+        cli_name="zeroclaw",
+        app_directory="/opt/zeroclaw/app",
+        mjs_entrypoint="zeroclaw",
+    ),
 }
 
 
@@ -113,7 +124,7 @@ def validate_version_format(version: str) -> bool:
     """Validate version string format."""
     if not version:
         return False
-    valid_prefixes = ("v", "main", "latest", "oc_", "pc_", "ic_")
+    valid_prefixes = ("v", "main", "latest", "oc_", "pc_", "ic_", "zc_")
     return version.startswith(valid_prefixes) or version.replace(".", "").isdigit()
 
 

@@ -34,9 +34,13 @@ detect_upstream() {
         echo "openclaw"
     elif [ -f /opt/picoclaw/app/picoclaw.mjs ]; then
         echo "picoclaw"
+    elif [ -f /opt/zeroclaw/zeroclaw ]; then
+        echo "zeroclaw"
+    elif [ -f /opt/picoclaw/picoclaw ]; then
+        echo "picoclaw"
     else
         log_error "No upstream application found!"
-        log_error "Expected either /opt/openclaw/app/openclaw.mjs or /opt/picoclaw/app/picoclaw.mjs"
+        log_error "Expected one of: /opt/openclaw/app/openclaw.mjs, /opt/picoclaw/picoclaw, or /opt/zeroclaw/zeroclaw"
         exit 1
     fi
 }
@@ -57,6 +61,10 @@ case "$UPSTREAM" in
     ironclaw)
         CLI_NAME="ironclaw"
         DEFAULT_STATE_DIR="/data/.ironclaw"
+        ;;
+    zeroclaw)
+        CLI_NAME="zeroclaw"
+        DEFAULT_STATE_DIR="/data/.zeroclaw"
         ;;
     *)
         log_error "Unknown upstream: $UPSTREAM"

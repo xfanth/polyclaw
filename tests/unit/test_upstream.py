@@ -22,6 +22,9 @@ class TestUpstreamType:
     def test_picoclaw_value(self):
         assert UpstreamType.PICOCLAW.value == "picoclaw"
 
+    def test_zeroclaw_value(self):
+        assert UpstreamType.ZEROCLAW.value == "zeroclaw"
+
     def test_from_string_openclaw(self):
         result = UpstreamType.from_string("openclaw")
         assert result == UpstreamType.OPENCLAW
@@ -30,9 +33,14 @@ class TestUpstreamType:
         result = UpstreamType.from_string("picoclaw")
         assert result == UpstreamType.PICOCLAW
 
+    def test_from_string_zeroclaw(self):
+        result = UpstreamType.from_string("zeroclaw")
+        assert result == UpstreamType.ZEROCLAW
+
     def test_from_string_case_insensitive(self):
         assert UpstreamType.from_string("OPENCLAW") == UpstreamType.OPENCLAW
         assert UpstreamType.from_string("PicoClaw") == UpstreamType.PICOCLAW
+        assert UpstreamType.from_string("ZEROCLAW") == UpstreamType.ZEROCLAW
         assert UpstreamType.from_string("  openclaw  ") == UpstreamType.OPENCLAW
 
     def test_from_string_invalid(self):
@@ -55,17 +63,27 @@ class TestUpstreamConfig:
     def picoclaw_config(self):
         return UPSTREAMS[UpstreamType.PICOCLAW]
 
+    @pytest.fixture
+    def zeroclaw_config(self):
+        return UPSTREAMS[UpstreamType.ZEROCLAW]
+
     def test_github_url_openclaw(self, openclaw_config):
         assert openclaw_config.github_url == "https://github.com/openclaw/openclaw"
 
     def test_github_url_picoclaw(self, picoclaw_config):
         assert picoclaw_config.github_url == "https://github.com/sipeed/picoclaw"
 
+    def test_github_url_zeroclaw(self, zeroclaw_config):
+        assert zeroclaw_config.github_url == "https://github.com/zeroclaw-labs/zeroclaw"
+
     def test_clone_url_openclaw(self, openclaw_config):
         assert openclaw_config.clone_url == "https://github.com/openclaw/openclaw.git"
 
     def test_clone_url_picoclaw(self, picoclaw_config):
         assert picoclaw_config.clone_url == "https://github.com/sipeed/picoclaw.git"
+
+    def test_clone_url_zeroclaw(self, zeroclaw_config):
+        assert zeroclaw_config.clone_url == "https://github.com/zeroclaw-labs/zeroclaw.git"
 
     def test_get_clone_command_with_version(self, openclaw_config):
         result = openclaw_config.get_clone_command("v2026.2.1", "/build")
@@ -85,6 +103,9 @@ class TestUpstreamConfig:
     def test_should_patch_workspace_picoclaw(self, picoclaw_config):
         assert picoclaw_config.should_patch_workspace() is False
 
+    def test_should_patch_workspace_zeroclaw(self, zeroclaw_config):
+        assert zeroclaw_config.should_patch_workspace() is False
+
     def test_frozen_dataclass_cannot_modify(self, openclaw_config):
         with pytest.raises(AttributeError):
             openclaw_config.github_owner = "modified"
@@ -103,6 +124,11 @@ class TestGetUpstream:
         assert result.name == UpstreamType.PICOCLAW
         assert result.github_owner == "sipeed"
 
+    def test_get_zeroclaw_by_enum(self):
+        result = get_upstream(UpstreamType.ZEROCLAW)
+        assert result.name == UpstreamType.ZEROCLAW
+        assert result.github_owner == "zeroclaw-labs"
+
     def test_get_openclaw_by_string(self):
         result = get_upstream("openclaw")
         assert result.name == UpstreamType.OPENCLAW
@@ -110,6 +136,10 @@ class TestGetUpstream:
     def test_get_picoclaw_by_string(self):
         result = get_upstream("picoclaw")
         assert result.name == UpstreamType.PICOCLAW
+
+    def test_get_zeroclaw_by_string(self):
+        result = get_upstream("zeroclaw")
+        assert result.name == UpstreamType.ZEROCLAW
 
     def test_get_invalid_upstream(self):
         with pytest.raises(ValueError):
@@ -133,9 +163,14 @@ class TestGetAllUpstreams:
         names = [u.name for u in result]
         assert UpstreamType.PICOCLAW in names
 
+    def test_contains_zeroclaw(self):
+        result = get_all_upstreams()
+        names = [u.name for u in result]
+        assert UpstreamType.ZEROCLAW in names
+
     def test_returns_at_least_two_upstreams(self):
         result = get_all_upstreams()
-        assert len(result) >= 2
+        assert len(result) >= 4
 
 
 class TestValidateVersionFormat:
@@ -157,6 +192,9 @@ class TestValidateVersionFormat:
 
     def test_valid_version_with_pc_prefix(self):
         assert validate_version_format("pc_main") is True
+
+    def test_valid_version_with_zc_prefix(self):
+        assert validate_version_format("zc_main") is True
 
     def test_valid_version_numeric_only(self):
         assert validate_version_format("2026.2.1") is True
@@ -207,6 +245,9 @@ class TestUpstreamsDict:
     def test_has_picoclaw(self):
         assert UpstreamType.PICOCLAW in UPSTREAMS
 
+    def test_has_zeroclaw(self):
+        assert UpstreamType.ZEROCLAW in UPSTREAMS
+
     def test_values_are_configs(self):
         for config in UPSTREAMS.values():
             assert isinstance(config, UpstreamConfig)
@@ -235,6 +276,10 @@ class TestUpstreamConfigProperties:
         config = UPSTREAMS[UpstreamType.PICOCLAW]
         assert config.mjs_entrypoint == "picoclaw.mjs"
 
+    def test_zeroclaw_mjs_entrypoint(self):
+        config = UPSTREAMS[UpstreamType.ZEROCLAW]
+        assert config.mjs_entrypoint == "zeroclaw"
+
     def test_openclaw_cli_name(self):
         config = UPSTREAMS[UpstreamType.OPENCLAW]
         assert config.cli_name == "openclaw"
@@ -242,3 +287,11 @@ class TestUpstreamConfigProperties:
     def test_picoclaw_cli_name(self):
         config = UPSTREAMS[UpstreamType.PICOCLAW]
         assert config.cli_name == "picoclaw"
+
+    def test_zeroclaw_cli_name(self):
+        config = UPSTREAMS[UpstreamType.ZEROCLAW]
+        assert config.cli_name == "zeroclaw"
+
+    def test_zeroclaw_app_directory(self):
+        config = UPSTREAMS[UpstreamType.ZEROCLAW]
+        assert config.app_directory == "/opt/zeroclaw/app"

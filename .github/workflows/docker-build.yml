@@ -183,7 +183,7 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
         include:
           - upstream: openclaw
             github_owner: openclaw
@@ -194,6 +194,9 @@ jobs:
           - upstream: ironclaw
             github_owner: nearai
             github_repo: ironclaw
+          - upstream: zeroclaw
+            github_owner: zeroclaw-labs
+            github_repo: zeroclaw
     outputs:
       image_tag: ${{ steps.meta.outputs.version }}
       upstream_version: ${{ steps.determine-version.outputs.upstream_version }}
@@ -214,6 +217,7 @@ jobs:
             openclaw) PREFIX="oc" ;;
             picoclaw) PREFIX="pc" ;;
             ironclaw) PREFIX="ic" ;;
+            zeroclaw) PREFIX="zc" ;;
             *) PREFIX="${UPSTREAM:0:2}" ;;
           esac
 
@@ -428,7 +432,7 @@ jobs:
       needs.check-pr-status.outputs.can_skip_build == 'true'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
     steps:
       - name: Download artifact from PR run
         uses: actions/download-artifact@v4
@@ -460,7 +464,7 @@ jobs:
       )
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -489,6 +493,7 @@ jobs:
             openclaw) PREFIX="oc" ;;
             picoclaw) PREFIX="pc" ;;
             ironclaw) PREFIX="ic" ;;
+            zeroclaw) PREFIX="zc" ;;
             *) PREFIX="${UPSTREAM:0:2}" ;;
           esac
 

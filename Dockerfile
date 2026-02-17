@@ -1,17 +1,18 @@
 # =============================================================================
-# OpenClaw/PicoClaw/IronClaw Docker Image - Debian Bookworm (LTS) Based
+# OpenClaw/PicoClaw/IronClaw/ZeroClaw Docker Image - Debian Bookworm (LTS) Based
 # =============================================================================
-# This Dockerfile builds either OpenClaw, PicoClaw, or IronClaw from source and
-# creates a production-ready image with all necessary components for 24/7 operation.
+# This Dockerfile builds OpenClaw, PicoClaw, IronClaw, or ZeroClaw from source
+# and creates a production-ready image with all necessary components for 24/7 operation.
 #
 # Build Arguments:
-#   UPSTREAM        - Which upstream to build: "openclaw", "picoclaw", or "ironclaw" (default: openclaw)
+#   UPSTREAM        - Which upstream to build: "openclaw", "picoclaw", "ironclaw", or "zeroclaw" (default: openclaw)
 #   UPSTREAM_VERSION - Version/branch to build (default: main)
 #
 # Examples:
 #   docker build -t openclaw:latest .
 #   docker build --build-arg UPSTREAM=picoclaw -t picoclaw:latest .
 #   docker build --build-arg UPSTREAM=ironclaw -t ironclaw:latest .
+#   docker build --build-arg UPSTREAM=zeroclaw -t zeroclaw:latest .
 #   docker build --build-arg UPSTREAM=openclaw --build-arg UPSTREAM_VERSION=v2026.2.1 -t openclaw:v2026.2.1 .
 # =============================================================================
 
@@ -49,7 +50,7 @@ RUN curl -fsSL "https://go.dev/dl/go1.25.7.linux-amd64.tar.gz" -o go.tar.gz \
     && rm go.tar.gz \
     && for bin in /usr/local/go/bin/*; do ln -sf "$bin" /usr/local/bin; done
 
-# Install Rust for IronClaw builds
+# Install Rust for IronClaw/ZeroClaw builds
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
@@ -71,11 +72,14 @@ RUN set -eux && \
     elif [ "${UPSTREAM}" = "ironclaw" ]; then \
         GITHUB_OWNER="nearai"; \
         GITHUB_REPO="ironclaw"; \
+    elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
+        GITHUB_OWNER="zeroclaw-labs"; \
+        GITHUB_REPO="zeroclaw"; \
     else \
         GITHUB_OWNER="openclaw"; \
         GITHUB_REPO="openclaw"; \
     fi && \
-    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ] || [ "${UPSTREAM_VERSION}" = "ic_main" ]; then \
+    if [ "${UPSTREAM_VERSION}" = "oc_main" ] || [ "${UPSTREAM_VERSION}" = "pc_main" ] || [ "${UPSTREAM_VERSION}" = "ic_main" ] || [ "${UPSTREAM_VERSION}" = "zc_main" ]; then \
         git clone --depth 1 --branch main "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
     else \
         git clone --depth 1 --branch "${UPSTREAM_VERSION}" "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git" .; \
@@ -93,7 +97,7 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
 # Patch upstream TypeScript errors (OpenClaw/IronClaw only)
 # These patches fix type errors in upstream code that breaks the build
 # Using @ts-ignore instead of @ts-expect-error so patches work regardless of upstream state
-RUN if [ "${UPSTREAM}" != "picoclaw" ]; then \
+RUN if [ "${UPSTREAM}" != "picoclaw" ] && [ "${UPSTREAM}" != "zeroclaw" ]; then \
         set -eux; \
         if [ -f src/channels/plugins/actions/telegram.ts ]; then \
             sed -i '237a\        // @ts-ignore poll action not in type union' src/channels/plugins/actions/telegram.ts; \
@@ -121,6 +125,12 @@ RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         cargo build --release && \
         cp target/release/ironclaw /build/ironclaw && \
         echo "IronClaw binary built successfully"; \
+    elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
+        echo "Building ZeroClaw (Rust binary)..."; \
+        cd /build && \
+        cargo build --release && \
+        mv target/release/zeroclaw /build/zeroclaw && \
+        echo "ZeroClaw binary built successfully"; \
     else \
         echo "Building OpenClaw (Node.js)..."; \
         pnpm install --no-frozen-lockfile && \
@@ -260,7 +270,7 @@ RUN groupadd -r ${UPSTREAM} -g 10000 \
 # Copy application from builder
 COPY --from=builder --chown=${UPSTREAM}:${UPSTREAM} /build /opt/${UPSTREAM}/app
 
-# For PicoClaw/IronClaw, move binary to correct location and clean up
+# For PicoClaw/IronClaw/ZeroClaw, move binary to correct location and clean up
 RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         echo "Moving PicoClaw binary..."; \
         mv /opt/picoclaw/app/picoclaw /opt/picoclaw/picoclaw && \
@@ -273,6 +283,12 @@ RUN if [ "${UPSTREAM}" = "picoclaw" ]; then \
         rm -rf /opt/ironclaw/app && \
         chmod +x /opt/ironclaw/ironclaw && \
         echo "IronClaw binary moved to /opt/ironclaw/ironclaw"; \
+    elif [ "${UPSTREAM}" = "zeroclaw" ]; then \
+        echo "Moving ZeroClaw binary..."; \
+        mv /opt/zeroclaw/app/zeroclaw /opt/zeroclaw/zeroclaw && \
+        rm -rf /opt/zeroclaw/app && \
+        chmod +x /opt/zeroclaw/zeroclaw && \
+        echo "ZeroClaw binary moved to /opt/zeroclaw/zeroclaw"; \
     else \
         echo "OpenClaw application is in /opt/openclaw/app/"; \
     fi
@@ -290,6 +306,8 @@ RUN if [ "${UPSTREAM}" = "openclaw" ]; then \
 # hadolint ignore=SC2016
 RUN printf '%s\n' '#!/usr/bin/env bash' "UPSTREAM=\"${UPSTREAM}\"" 'if [ "$UPSTREAM" = "picoclaw" ]; then' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
+    'elif [ "$UPSTREAM" = "zeroclaw" ]; then' \
+    '    exec /opt/zeroclaw/zeroclaw "$@"' \
     'elif [ "$UPSTREAM" = "ironclaw" ]; then' \
     '    exec /opt/ironclaw/ironclaw "$@"' \
     'else' \
@@ -305,16 +323,13 @@ RUN printf '%s\n' '#!/usr/bin/env bash' \
     '    exec /opt/picoclaw/picoclaw "$@"' \
     'elif [ -f /opt/ironclaw/ironclaw ]; then' \
     '    exec /opt/ironclaw/ironclaw "$@"' \
+    'elif [ -f /opt/zeroclaw/zeroclaw ]; then' \
+    '    exec /opt/zeroclaw/zeroclaw "$@"' \
     'else' \
     '    echo "Error: No upstream application found" >&2' \
     '    exit 1' \
-    'fi' > /usr/local/bin/upstream.real \
-    && chmod +x /usr/local/bin/upstream.real
-
-# Copy and install the user switching wrapper
-COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/openclaw-wrapper.sh /usr/local/bin/${UPSTREAM}
-RUN chmod +x /usr/local/bin/${UPSTREAM} \
-    && ln -sf /usr/local/bin/${UPSTREAM} /usr/local/bin/upstream
+    'fi' > /usr/local/bin/upstream \
+    && chmod +x /usr/local/bin/upstream
 
 # Set up directories with proper permissions
 RUN mkdir -p /data/.${UPSTREAM} /data/workspace /app/config /var/log/${UPSTREAM} \
