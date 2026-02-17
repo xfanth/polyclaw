@@ -155,12 +155,12 @@ while [ $(($(date +%s) - START_TIME)) -lt $TEST_TIMEOUT ]; do
         break
     fi
 
-    # Show container logs if it's restarting
+    # Show container logs if it's restarting or exited
     STATUS=$(docker compose -f "$COMPOSE_FILE" ps "$SERVICE_NAME" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | head -1)
-    if echo "$STATUS" | grep -q "exited\|dead"; then
-        log_error "Container exited unexpectedly"
+    if echo "$STATUS" | grep -q "exited\|dead\|restarting"; then
+        log_error "Container is in bad state: $STATUS"
         log_info "Container logs:"
-        docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 50
+        docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 100
         TESTS_FAILED=$((TESTS_FAILED + 1))
         exit 1
     fi
