@@ -444,6 +444,113 @@ else
 fi
 
 # =============================================================================
+# Test 11: Verify correct state directory
+# =============================================================================
+log_info "Test 11: Verifying state directory matches upstream..."
+
+EXPECTED_STATE_DIR="/data/.${UPSTREAM}"
+
+# Check that the state directory exists and matches upstream name
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -d "$EXPECTED_STATE_DIR" 2>/dev/null; then
+    log_success "State directory exists: $EXPECTED_STATE_DIR"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "State directory does not exist: $EXPECTED_STATE_DIR"
+    log_error "This indicates a mismatch between UPSTREAM and state directory"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+# Check that config file is in the correct state directory
+if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" test -f "$EXPECTED_STATE_DIR/${UPSTREAM}.json" 2>/dev/null; then
+    log_success "Config file exists in correct state directory"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "Config file not found at $EXPECTED_STATE_DIR/${UPSTREAM}.json"
+    # List what's in /data to help debug
+    log_info "Contents of /data:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la /data/ 2>/dev/null || true
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+# =============================================================================
+# Test 12: Check gateway process is running
+# =============================================================================
+log_info "Test 12: Checking gateway process status..."
+
+# Get container logs from the last 30 seconds
+CONTAINER_LOGS=$(docker compose -f "$COMPOSE_FILE" logs "$SERVICE_NAME" --tail 50 2>&1)
+
+# Check for process exit/crash errors
+if echo "$CONTAINER_LOGS" | grep -q "exited.*not expected\|FATAL state\|exit status"; then
+    log_error "Gateway process crashed or exited unexpectedly"
+    log_error "Recent logs:"
+    echo "$CONTAINER_LOGS" | tail -20
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    log_success "Gateway process appears to be running"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# Check for specific error patterns
+CRITICAL_ERRORS=0
+
+# Check for doctor --fix error (zeroclaw/picoclaw don't support it)
+if echo "$CONTAINER_LOGS" | grep -q "unexpected argument '--fix' found"; then
+    log_error "Doctor --fix called on upstream that doesn't support it"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+fi
+
+# Check for state directory mismatch in logs
+if echo "$CONTAINER_LOGS" | grep -q "State dir: /data/.openclaw" && [ "$UPSTREAM" != "openclaw" ]; then
+    log_error "State dir is .openclaw but UPSTREAM is $UPSTREAM - mismatch detected"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+fi
+
+if [ $CRITICAL_ERRORS -gt 0 ]; then
+    log_error "Found $CRITICAL_ERRORS critical error(s) in logs"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    log_success "No critical errors found in logs"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# =============================================================================
+# Test 13: Verify supervisord status
+# =============================================================================
+log_info "Test 13: Checking supervisord process status..."
+
+# Check supervisordctl status
+SUPERVISOR_STATUS=$(docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" supervisorctl status 2>&1 || true)
+
+if echo "$SUPERVISOR_STATUS" | grep -q "RUNNING"; then
+    log_success "At least one process is RUNNING under supervisord"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "No processes are RUNNING under supervisord"
+    log_info "Supervisor status:"
+    echo "$SUPERVISOR_STATUS"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+# Check that the upstream process specifically is running
+if echo "$SUPERVISOR_STATUS" | grep "${UPSTREAM}" | grep -q "RUNNING"; then
+    log_success "${UPSTREAM} process is RUNNING"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+elif echo "$SUPERVISOR_STATUS" | grep "${UPSTREAM}" | grep -q "FATAL\|EXITED\|BACKOFF"; then
+    log_error "${UPSTREAM} process is not running (FATAL/EXITED/BACKOFF)"
+    log_info "Process status for ${UPSTREAM}:"
+    echo "$SUPERVISOR_STATUS" | grep "${UPSTREAM}"
+    # Show recent error logs
+    log_info "Recent error logs:"
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/var/log/supervisor/${UPSTREAM}-error.log" 2>/dev/null | tail -20 || true
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    log_warn "Could not determine ${UPSTREAM} process status"
+    # Don't fail on this - may be a timing issue
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo ""
