@@ -165,3 +165,6 @@ When changing the security-scan matrix (e.g., adding a new upstream):
 - This is **expected behavior** - the old matrix categories don't match new ones
 - The warning resolves automatically after merge to main
 - All scans still run correctly; the warning is informational only
+## Docker Entrypoint Environment Variables
+
+When adding new environment variables to `scripts/configure.js`, you **must** also add them to the `--whitelist-environment` list in `scripts/entrypoint.sh` (around line 81). The entrypoint runs as root, then switches to the upstream user via `su` - only whitelisted env vars survive this switch. See MEMORY.md for the current whitelist.

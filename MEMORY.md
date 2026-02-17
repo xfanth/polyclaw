@@ -100,6 +100,21 @@ When changing the `security-scan` job matrix (e.g., adding a new upstream):
 
 Example: Adding `ironclaw` to matrix `[openclaw, picoclaw]` → `[openclaw, picoclaw, ironclaw]`
 causes Code Scanning to not find a baseline for the new `ironclaw` category.
+## Environment Variable Whitelist in Docker Entrypoint
+
+When the entrypoint script runs as root and then switches to the upstream user via `su`, only whitelisted environment variables are passed through.
+
+- **Problem**: If an env var like `OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS` is not in the `--whitelist-environment` list, it gets lost when switching users
+- **Symptom**: Config shows correct values but the application doesn't see them because configure.js runs as the switched user
+- **Location**: `scripts/entrypoint.sh` line ~81 in the `su` command
+- **Fix**: Add any new environment variables that configure.js reads to the whitelist
+
+Current whitelist (as of Feb 2026):
+```
+UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_GATEWAY_PORT,PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY
+```
+
+When adding new env vars to `configure.js`, **always add them to the whitelist** in `entrypoint.sh`.
 
 ## Available Tools
 
