@@ -1,8 +1,8 @@
 # OpenClaw/PicoClaw Docker
 
-[![CodeQL](https://github.com/xfanth/openclaw/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/xfanth/openclaw/actions/workflows/github-code-scanning/codeql)
-[![Docker Build and Push](https://github.com/xfanth/openclaw/actions/workflows/docker-build.yml/badge.svg)](https://github.com/xfanth/openclaw/actions/workflows/docker-build.yml)
-[![Pre-Commit Checks](https://github.com/xfanth/openclaw/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/xfanth/openclaw/actions/workflows/pre-commit.yml)
+[![CodeQL](https://github.com/xfanth/claw-builder/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/xfanth/claw-builder/actions/workflows/github-code-scanning/codeql)
+[![Docker Build and Push](https://github.com/xfanth/claw-builder/actions/workflows/docker-build.yml/badge.svg)](https://github.com/xfanth/claw-builder/actions/workflows/docker-build.yml)
+[![Pre-Commit Checks](https://github.com/xfanth/claw-builder/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/xfanth/claw-builder/actions/workflows/pre-commit.yml)
 [![Docker Build](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml/badge.svg)](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://ghcr.io/openclaw/openclaw-docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

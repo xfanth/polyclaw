@@ -217,7 +217,7 @@ jobs:
             *) PREFIX="${UPSTREAM:0:2}" ;;
           esac
 
-          # Determine xfanth/openclaw repo tag
+          # Determine xfanth/claw-builder repo tag
           if [ "${{ github.ref_type }}" = "tag" ]; then
             XFANTH_TAG="xfanth_${{ github.ref_name }}"
           else
@@ -287,7 +287,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}
+          images: ${{ env.REGISTRY }}/xfanth/${{ matrix.upstream }}
           tags: |
             type=raw,value=${{ steps.determine-version.outputs.xfanth_tag }}
             type=raw,value=${{ steps.determine-version.outputs.upstream_tag }}
@@ -496,7 +496,7 @@ jobs:
             *) PREFIX="${UPSTREAM:0:2}" ;;
           esac
 
-          # Determine xfanth/openclaw repo tag
+          # Determine xfanth/claw-builder repo tag
           if [ "${{ github.ref_type }}" = "tag" ]; then
             XFANTH_TAG="xfanth_${{ github.ref_name }}"
           else
@@ -568,7 +568,7 @@ jobs:
 
           IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
           for TAG in "${TAG_ARRAY[@]}"; do
-            TARGET="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.upstream }}:$TAG"
+            TARGET="${{ env.REGISTRY }}/xfanth/${{ matrix.upstream }}:$TAG"
             docker tag "$IMAGE_ID" "$TARGET"
             docker push "$TARGET"
             echo "Pushed $TARGET"
