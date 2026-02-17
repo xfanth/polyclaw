@@ -4,7 +4,7 @@
 
 This Docker setup provides a production-ready, 24/7 capable OpenClaw deployment with:
 - **Debian Bookworm (LTS)** base image
-- **All your requested environment variables** supported
+- **All environment variables** supported via `.env` file
 - **Persistent data** that survives container recreation
 - **GitHub Actions CI/CD** for automated builds
 - **Multi-architecture support** (AMD64 & ARM64)
@@ -14,8 +14,9 @@ This Docker setup provides a production-ready, 24/7 capable OpenClaw deployment 
 ```
 openclaw-docker/
 ├── .github/workflows/
-│   ├── auto-update.yml       # Daily OpenClaw version checks
-│   └── docker-build.yml      # Build & push to GHCR
+│   ├── auto-update.yml       # Daily version checks
+│   ├── docker-build.yml      # Build & push to GHCR
+│   └── manual-release.yml    # Manual release trigger
 ├── config/
 │   └── openclaw.json.example # Example configuration
 ├── scripts/
@@ -26,7 +27,12 @@ openclaw-docker/
 ├── Dockerfile                # Debian-based image
 ├── Makefile                  # Convenience commands
 ├── nginx.conf                # Reverse proxy config
-└── README.md                 # Full documentation
+├── README.md                 # Full documentation
+├── SETUP.md                  # This file
+├── QUICKSTART.md             # 5-minute quick start
+├── SECURITY.md               # Security policy
+├── AGENTS.md                 # AI agent guidelines
+└── MEMORY.md                 # Project memory
 ```
 
 ## Quick Start
@@ -60,10 +66,9 @@ AUTH_PASSWORD=your-secure-password
 # Required: Gateway token (generate with: openssl rand -hex 32)
 OPENCLAW_GATEWAY_TOKEN=...
 
-# Required: Your data directory
-OPENCLAW_DATA_DIR=/mnt/shuttle/share/app-data/openclaw3
-OPENCLAW_WORKSPACE_DIR=/mnt/shuttle/share/app-data/openclaw3/workspace
-
+# Data directories (use paths appropriate for your system)
+OPENCLAW_DATA_DIR=./data/.openclaw
+OPENCLAW_WORKSPACE_DIR=./data/workspace
 ```
 
 ### 3. Start OpenClaw
@@ -83,16 +88,20 @@ make up
 
 ## Data Persistence
 
-Your data is stored in these locations:
+Your data is stored in these locations (configurable via `.env`):
 
-| Path | Contents |
-|------|----------|
-| `/mnt/shuttle/share/app-data/openclaw3` | Config, sessions, credentials |
-| `/mnt/shuttle/share/app-data/openclaw3/workspace` | Agent projects |
-| `/mnt/shuttle/share/app-data/openclaw3/npm` | NPM packages for skills |
-| `/mnt/shuttle/share/app-data/openclaw3/brew` | Homebrew packages |
-| `/mnt/shuttle/share/app-data/openclaw3/skills` | Installed skills |
-| `/mnt/shuttle/share/app-data/openclaw3/plugins` | Installed plugins |
+| Host Path | Container Path | Contents |
+|-----------|---------------|----------|
+| `OPENCLAW_DATA_DIR` | `/data/.openclaw` | Config, sessions, credentials |
+| `OPENCLAW_WORKSPACE_DIR` | `/data/workspace` | Agent projects |
+| `OPENCLAW_LOGS_DIR` | `/var/log/openclaw` | Application logs |
+
+Default values in `.env.example`:
+```env
+OPENCLAW_DATA_DIR=./data/.openclaw
+OPENCLAW_WORKSPACE_DIR=./data/workspace
+OPENCLAW_LOGS_DIR=./logs
+```
 
 **If the container is destroyed and recreated, all data persists!**
 
@@ -111,13 +120,20 @@ OPENROUTER_API_KEY=             # OpenRouter multi-provider
 OPENCODE_API_KEY=               # OpenCode
 ANTHROPIC_API_KEY=              # Claude
 OPENAI_API_KEY=                 # GPT models
-# ... and more in .env.example
+XAI_API_KEY=                    # xAI (Grok)
+MISTRAL_API_KEY=                # Mistral
+VENICE_API_KEY=                 # Venice
+MOONSHOT_API_KEY=               # Moonshot
+MINIMAX_API_KEY=                # Minimax
+AI_GATEWAY_API_KEY=             # AI Gateway
+SYNTHETIC_API_KEY=              # Synthetic
+XIAOMI_API_KEY=                 # Xiaomi
 ```
 
 ### Model Selection
 
 ```env
-OPENCLAW_PRIMARY_MODEL=anthropic/claude-sonnet-4-5
+OPENCLAW_PRIMARY_MODEL=anthropic/claude-sonnet-4-5-20250929
 
 # Fallback models (comma-separated) when primary fails
 OPENCLAW_FALLBACK_MODELS=openrouter/anthropic/claude-opus-4-5,google/gemini-2.5-pro
@@ -159,13 +175,30 @@ WHATSAPP_ALLOW_FROM=+1234567890
 WHATSAPP_GROUP_POLICY=allowlist
 ```
 
-### 1Password
+### Telegram
 
 ```env
-OP_SERVICE_ACCOUNT_TOKEN=       # 1Password service account
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_DM_POLICY=pairing
+TELEGRAM_ALLOW_FROM=user1,user2
 ```
 
+### Discord
 
+```env
+DISCORD_BOT_TOKEN=your-bot-token
+DISCORD_DM_POLICY=pairing
+DISCORD_GROUP_POLICY=allowlist
+```
+
+### Slack
+
+```env
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_DM_POLICY=pairing
+SLACK_GROUP_POLICY=open
+```
 
 ### Port
 
@@ -192,9 +225,10 @@ The repository includes automated workflows:
 
 **Published Images:**
 ```
-ghcr.io/YOUR_USERNAME/openclaw-docker:latest
-ghcr.io/YOUR_USERNAME/openclaw-docker:v1.0.0
-ghcr.io/YOUR_USERNAME/openclaw-docker:sha-abc123
+ghcr.io/xfanth/openclaw:latest
+ghcr.io/xfanth/openclaw:v1.0.0
+ghcr.io/xfanth/picoclaw:latest
+ghcr.io/xfanth/picoclaw:v1.0.0
 ```
 
 ### 2. Auto-Update Check (`.github/workflows/auto-update.yml`)
@@ -214,8 +248,8 @@ Once CI/CD is set up, use the image in your `docker-compose.yml`:
 
 ```yaml
 services:
-  openclaw:
-    image: ghcr.io/YOUR_USERNAME/openclaw-docker:latest
+  gateway:
+    image: ghcr.io/xfanth/openclaw:latest
     # ... rest of config
 ```
 
@@ -266,7 +300,7 @@ docker compose up -d
 
 ```bash
 # Check logs
-docker compose logs -f openclaw
+docker compose logs -f gateway
 
 # Common issues:
 # - Missing API key: Set at least one provider
@@ -277,8 +311,8 @@ docker compose logs -f openclaw
 ### Permission issues
 
 ```bash
-# Fix ownership
-sudo chown -R 1000:1000 /mnt/shuttle/share/app-data/openclaw3
+# Fix ownership (container runs as UID/GID 10000)
+sudo chown -R 10000:10000 ./data
 ```
 
 ### Reset everything
@@ -288,7 +322,7 @@ sudo chown -R 1000:1000 /mnt/shuttle/share/app-data/openclaw3
 docker compose down
 
 # Remove data (WARNING: destructive!)
-sudo rm -rf /mnt/shuttle/share/app-data/openclaw3
+sudo rm -rf ./data
 
 # Start fresh
 docker compose up -d
@@ -300,7 +334,7 @@ docker compose up -d
 2. **Use strong `OPENCLAW_GATEWAY_TOKEN`** (32+ hex chars)
 3. **Keep `.env` file secure** - never commit it
 4. **Use HTTPS** in production (put behind reverse proxy)
-5. **Restrict allowlists** for WhatsApp/Telegram
+5. **Restrict allowlists** for WhatsApp/Telegram/Discord
 
 ## Next Steps
 
@@ -314,3 +348,4 @@ docker compose up -d
 
 - [OpenClaw Documentation](https://docs.openclaw.ai/)
 - [OpenClaw GitHub](https://github.com/openclaw/openclaw)
+- [PicoClaw GitHub](https://github.com/sipeed/picoclaw)
