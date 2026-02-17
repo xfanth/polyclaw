@@ -8,9 +8,10 @@
 const fs = require('fs');
 const path = require('path');
 
+const UPSTREAM = process.env.UPSTREAM || 'openclaw';
 const STATE_DIR = (process.env.OPENCLAW_STATE_DIR || '/data/.openclaw').replace(/\/+$/, '');
 const WORKSPACE_DIR = (process.env.OPENCLAW_WORKSPACE_DIR || '/data/workspace').replace(/\/+$/, '');
-const CONFIG_FILE = process.env.OPENCLAW_CONFIG_PATH || path.join(STATE_DIR, 'openclaw.json');
+const CONFIG_FILE = process.env.OPENCLAW_CONFIG_PATH || path.join(STATE_DIR, `${UPSTREAM}.json`);
 
 console.log('[configure] state dir:', STATE_DIR);
 console.log('[configure] workspace dir:', WORKSPACE_DIR);
@@ -198,7 +199,7 @@ fs.writeFileSync(CONFIG_FILE, configJson, 'utf8');
 console.log('[configure] wrote config to', CONFIG_FILE);
 
 // Backup
-const backupFile = path.join(STATE_DIR, 'openclaw.json.backup');
+const backupFile = path.join(STATE_DIR, `${UPSTREAM}.json.backup`);
 fs.writeFileSync(backupFile, configJson, 'utf8');
 
 try {
