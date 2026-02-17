@@ -64,6 +64,43 @@ This workflow is NON-NEGOTIABLE for all code changes.
   - If no, build fresh images
   - This avoids the race condition where jobs try to access outputs before they're available
 
+## Upstream Variants
+
+This project builds Docker images for three upstream variants:
+
+1. **OpenClaw** (`openclaw/openclaw`) - Node.js-based, official implementation
+   - Built with `pnpm install && pnpm build`
+   - Has UI components (`pnpm ui:build`)
+   - Entry point: `node /opt/openclaw/app/openclaw.mjs`
+
+2. **PicoClaw** (`sipeed/picoclaw`) - Go-based, lightweight implementation
+   - Built with `go build`
+   - No UI components
+   - Entry point: `/opt/picoclaw/picoclaw`
+
+3. **IronClaw** (`nearai/ironclaw`) - Rust-based, privacy-focused implementation
+   - Built with `cargo build --release`
+   - No UI components
+   - Entry point: `/opt/ironclaw/ironclaw`
+
+When adding a new upstream:
+- Update `Dockerfile` clone logic with GitHub owner/repo
+- Add build step for the new language/toolchain
+- Update binary handling and CLI wrappers
+- Add to CI matrix in `.github/workflows/docker-build.yml` and `manual-release.yml`
+- Skip smoke tests if architecture differs (e.g., Rust binary has different API)
+
+## Trivy/Code Scanning Matrix Changes
+
+When changing the `security-scan` job matrix (e.g., adding a new upstream):
+- GitHub Code Scanning shows warning: "X configurations not found"
+- This happens because the old matrix categories no longer match the new ones
+- **The warning is expected and will resolve after merge to main**
+- Do NOT try to "fix" this warning - it's informational only
+- All security scans still run and upload SARIF results correctly
+
+Example: Adding `ironclaw` to matrix `[openclaw, picoclaw]` → `[openclaw, picoclaw, ironclaw]`
+causes Code Scanning to not find a baseline for the new `ironclaw` category.
 ## Environment Variable Whitelist in Docker Entrypoint
 
 When the entrypoint script runs as root and then switches to the upstream user via `su`, only whitelisted environment variables are passed through.
