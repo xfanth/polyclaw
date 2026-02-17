@@ -19,9 +19,9 @@ AUTH_PASSWORD=your-secure-password
 # Required: Gateway token (generate: openssl rand -hex 32)
 OPENCLAW_GATEWAY_TOKEN=...
 
-# Required: Your data directory
-OPENCLAW_DATA_DIR=/mnt/shuttle/share/app-data/openclaw3
-OPENCLAW_WORKSPACE_DIR=/mnt/shuttle/share/app-data/openclaw3/workspace
+# Data directories (defaults work for most setups)
+OPENCLAW_DATA_DIR=./data/.openclaw
+OPENCLAW_WORKSPACE_DIR=./data/workspace
 ```
 
 ## Step 2: Start OpenClaw
@@ -41,24 +41,24 @@ Open http://localhost:8080
 
 ```bash
 # View QR code
-docker compose logs -f openclaw | grep -A 20 "QR"
+docker compose logs -f gateway | grep -A 20 "QR"
 ```
 
 Scan with WhatsApp mobile app.
 
-## Done! 🎉
+## Done!
 
 Your OpenClaw instance is now running 24/7 with:
-- ✅ Persistent data storage
-- ✅ All AI providers configured
-- ✅ Web UI with authentication
-- ✅ Auto-restart on failure
+- Persistent data storage
+- All AI providers configured
+- Web UI with authentication
+- Auto-restart on failure
 
 ## Useful Commands
 
 ```bash
 # View logs
-docker compose logs -f openclaw
+docker compose logs -f gateway
 
 # Restart
 docker compose restart
@@ -67,7 +67,7 @@ docker compose restart
 docker compose pull && docker compose up -d
 
 # Shell access
-docker compose exec openclaw bash
+docker compose exec gateway bash
 
 # Stop
 docker compose down
@@ -77,17 +77,17 @@ docker compose down
 
 **Container won't start?**
 ```bash
-docker compose logs openclaw | tail -50
+docker compose logs gateway | tail -50
 ```
 
 **Permission issues?**
 ```bash
-sudo chown -R 1000:1000 /mnt/shuttle/share/app-data/openclaw3
+sudo chown -R 10000:10000 ./data
 ```
 
 **Reset everything?**
 ```bash
 docker compose down
-sudo rm -rf /mnt/shuttle/share/app-data/openclaw3/*
+sudo rm -rf ./data
 docker compose up -d
 ```

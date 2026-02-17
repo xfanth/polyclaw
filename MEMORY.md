@@ -63,6 +63,7 @@ This workflow is NON-NEGOTIABLE for all code changes.
   - If yes, skip build and download artifacts from PR run
   - If no, build fresh images
   - This avoids the race condition where jobs try to access outputs before they're available
+
 ## Upstream Variants
 
 This project builds Docker images for three upstream variants:
@@ -104,14 +105,52 @@ causes Code Scanning to not find a baseline for the new `ironclaw` category.
 
 When the entrypoint script runs as root and then switches to the upstream user via `su`, only whitelisted environment variables are passed through.
 
-- **Problem**: If an env var like `OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS` is not in the `--whitelist-environment` list, it gets lost when switching users
+- **Problem**: If an env var is not in the `--whitelist-environment` list, it gets lost when switching users
 - **Symptom**: Config shows correct values but the application doesn't see them because configure.js runs as the switched user
-- **Location**: `scripts/entrypoint.sh` line ~81 in the `su` command
+- **Location**: `scripts/entrypoint.sh` line ~85 in the `su` command
 - **Fix**: Add any new environment variables that configure.js reads to the whitelist
 
-Current whitelist (as of Feb 2026):
+Current whitelist (from `scripts/entrypoint.sh` line 85):
 ```
-UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_GATEWAY_PORT,PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY
+UPSTREAM
+OPENCLAW_STATE_DIR
+OPENCLAW_WORKSPACE_DIR
+OPENCLAW_GATEWAY_PORT
+PORT
+OPENCLAW_GATEWAY_TOKEN
+AUTH_USERNAME
+AUTH_PASSWORD
+OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS
+OPENCLAW_GATEWAY_BIND
+OPENCLAW_PRIMARY_MODEL
+BROWSER_CDP_URL
+BROWSER_DEFAULT_PROFILE
+WHATSAPP_ENABLED
+WHATSAPP_DM_POLICY
+WHATSAPP_ALLOW_FROM
+TELEGRAM_BOT_TOKEN
+TELEGRAM_DM_POLICY
+DISCORD_BOT_TOKEN
+DISCORD_DM_POLICY
+SLACK_BOT_TOKEN
+SLACK_DM_POLICY
+HOOKS_ENABLED
+HOOKS_TOKEN
+HOOKS_PATH
+ANTHROPIC_API_KEY
+OPENAI_API_KEY
+OPENROUTER_API_KEY
+GEMINI_API_KEY
+XAI_API_KEY
+GROQ_API_KEY
+MISTRAL_API_KEY
+CEREBRAS_API_KEY
+MOONSHOT_API_KEY
+KIMI_API_KEY
+ZAI_API_KEY
+OPENCODE_API_KEY
+COPILOT_GITHUB_TOKEN
+XIAOMI_API_KEY
 ```
 
 When adding new env vars to `configure.js`, **always add them to the whitelist** in `entrypoint.sh`.
@@ -129,9 +168,50 @@ The following tools are available:
 - `sequential-thinking` - Problem-solving through structured thinking
 - `jina-mcp-server_*` - Web search, URL reading, image search, etc.
 - `playwright_browser_*` - Browser automation
-- `puppeteer_*` - Browser automation
 - `memory_*` - Knowledge graph operations
 - `gemini-cli_*` - Gemini AI interactions
 - `mcp-server-analyzer_*` - Code analysis (ruff, vulture)
 - `filesystem_*` - File operations
 - `mcp_everything_*` - Utility functions
+
+## Project Structure
+
+```
+openclaw-docker/
+├── .github/workflows/    # CI/CD workflows
+├── config/               # Example configurations
+├── scripts/              # Entry point and configuration scripts
+├── .env.example          # Environment variable template
+├── docker-compose.yml    # Docker Compose configuration
+├── Dockerfile            # Multi-stage Docker build
+├── Makefile              # Convenience commands
+├── nginx.conf            # Nginx reverse proxy config
+├── pyproject.toml        # Python project config (for tests)
+└── tests/                # Test suite
+```
+
+## Common Commands
+
+```bash
+# Setup
+cp .env.example .env && nano .env
+
+# Start/stop
+docker compose up -d
+docker compose down
+
+# Logs
+docker compose logs -f gateway
+
+# Shell
+docker compose exec gateway bash
+
+# Update
+docker compose pull && docker compose up -d
+
+# Makefile shortcuts
+make help
+make up
+make logs
+make shell
+```

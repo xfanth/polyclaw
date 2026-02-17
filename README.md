@@ -61,7 +61,7 @@ Open your browser to `http://localhost:8080` and log in with:
 
 ## Upstream Selection
 
-This Docker setup supports two upstream projects:
+This Docker setup supports three upstream projects:
 
 ### OpenClaw (Default)
 
@@ -88,6 +88,18 @@ UPSTREAM_VERSION=main
 - **GitHub:** https://github.com/sipeed/picoclaw
 - **Ideal for:** MAIX devices, embedded systems, lightweight deployments
 
+### IronClaw
+
+NEAR AI's AI agent gateway with blockchain integration capabilities.
+
+```env
+UPSTREAM=ironclaw
+UPSTREAM_VERSION=main
+```
+
+- **GitHub:** https://github.com/nearai/ironclaw
+- **Ideal for:** Blockchain-integrated AI applications
+
 ### Switching Between Upstreams
 
 Simply change the `UPSTREAM` variable in your `.env` file:
@@ -99,6 +111,10 @@ UPSTREAM_VERSION=main
 
 # Or use PicoClaw
 UPSTREAM=picoclaw
+UPSTREAM_VERSION=main
+
+# Or use IronClaw
+UPSTREAM=ironclaw
 UPSTREAM_VERSION=main
 ```
 
@@ -121,12 +137,22 @@ At least one AI provider API key is required:
 | OpenAI | `OPENAI_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Google Gemini | `GEMINI_API_KEY` |
+| xAI (Grok) | `XAI_API_KEY` |
 | Groq | `GROQ_API_KEY` |
+| Mistral | `MISTRAL_API_KEY` |
 | Cerebras | `CEREBRAS_API_KEY` |
+| Venice | `VENICE_API_KEY` |
+| Moonshot | `MOONSHOT_API_KEY` |
 | Moonshot Kimi | `KIMI_API_KEY` |
+| Minimax | `MINIMAX_API_KEY` |
 | Z.AI | `ZAI_API_KEY` |
 | OpenCode | `OPENCODE_API_KEY` |
+| AI Gateway | `AI_GATEWAY_API_KEY` |
+| Synthetic | `SYNTHETIC_API_KEY` |
+| Xiaomi | `XIAOMI_API_KEY` |
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
+| AWS Bedrock | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` |
+| Ollama (local) | `OLLAMA_BASE_URL` |
 
 ### Model Selection
 
@@ -163,13 +189,20 @@ OPENCLAW_IMAGE_MODEL_FALLBACKS=openai/dall-e-3,stability-ai/stable-diffusion
 
 ### Data Persistence
 
-The following directories are persisted:
+The following directories are persisted (configurable via `.env`):
 
-| Host Path | Container Path | Contents |
-|-----------|---------------|----------|
-| `/mnt/shuttle/share/app-data/openclaw3` | `/data/.openclaw` or `/data/.picoclaw` | Config, sessions, skills, plugins |
-| `/mnt/shuttle/share/app-data/openclaw3/workspace` | `/data/workspace` | Agent projects |
-| `./logs` | `/var/log/openclaw` or `/var/log/picoclaw` | Application logs |
+| Host Path (default) | Container Path | Contents |
+|---------------------|----------------|----------|
+| `./data/.openclaw` | `/data/.openclaw` | Config, sessions, skills, plugins |
+| `./data/workspace` | `/data/workspace` | Agent projects |
+| `./logs` | `/var/log/openclaw` | Application logs |
+
+Configure via environment variables:
+```env
+OPENCLAW_DATA_DIR=./data/.openclaw
+OPENCLAW_WORKSPACE_DIR=./data/workspace
+OPENCLAW_LOGS_DIR=./logs
+```
 
 ### WhatsApp Configuration
 
@@ -177,6 +210,8 @@ The following directories are persisted:
 WHATSAPP_ENABLED=true
 WHATSAPP_DM_POLICY=pairing
 WHATSAPP_ALLOW_FROM=+1234567890,+0987654321
+WHATSAPP_GROUP_POLICY=allowlist
+WHATSAPP_GROUP_ALLOW_FROM=group-id-1@g.us
 ```
 
 When enabled, scan the QR code in the logs to pair:
@@ -190,6 +225,7 @@ docker compose logs -f gateway
 ```env
 TELEGRAM_BOT_TOKEN=your-bot-token-from-botfather
 TELEGRAM_DM_POLICY=pairing
+TELEGRAM_ALLOW_FROM=username1,username2
 ```
 
 ### Discord Configuration
@@ -197,6 +233,16 @@ TELEGRAM_DM_POLICY=pairing
 ```env
 DISCORD_BOT_TOKEN=your-bot-token
 DISCORD_DM_POLICY=pairing
+DISCORD_DM_ALLOW_FROM=user-id-1,user-id-2
+```
+
+### Slack Configuration
+
+```env
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_DM_POLICY=pairing
+SLACK_GROUP_POLICY=open
 ```
 
 ### Browser Automation
@@ -241,14 +287,14 @@ curl -X POST http://localhost:8080/hooks/wake \
 ```yaml
 services:
   gateway:
-    image: ghcr.io/n00b001/openclaw:latest
+    image: ghcr.io/xfanth/openclaw:latest
     ports:
       - "8080:8080"
     environment:
       - UPSTREAM=openclaw
       - ANTHROPIC_API_KEY=sk-ant-...
       - AUTH_PASSWORD=secure-password
-      - OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+      - OPENCLAW_GATEWAY_TOKEN=your-token
     volumes:
       - ./data:/data/.openclaw
     restart: unless-stopped
@@ -259,16 +305,34 @@ services:
 ```yaml
 services:
   gateway:
-    image: ghcr.io/n00b001/picoclaw:latest
+    image: ghcr.io/xfanth/picoclaw:latest
     ports:
       - "8080:8080"
     environment:
       - UPSTREAM=picoclaw
       - ANTHROPIC_API_KEY=sk-ant-...
       - AUTH_PASSWORD=secure-password
-      - OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+      - OPENCLAW_GATEWAY_TOKEN=your-token
     volumes:
       - ./data:/data/.picoclaw
+    restart: unless-stopped
+```
+
+### Minimal Setup (IronClaw)
+
+```yaml
+services:
+  gateway:
+    image: ghcr.io/xfanth/ironclaw:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - UPSTREAM=ironclaw
+      - ANTHROPIC_API_KEY=sk-ant-...
+      - AUTH_PASSWORD=secure-password
+      - OPENCLAW_GATEWAY_TOKEN=your-token
+    volumes:
+      - ./data:/data/.ironclaw
     restart: unless-stopped
 ```
 
@@ -286,7 +350,7 @@ See the included [`docker-compose.yml`](docker-compose.yml) for a complete examp
 ```yaml
 services:
   gateway:
-    image: ghcr.io/n00b001/${UPSTREAM:-openclaw}:latest
+    image: ghcr.io/xfanth/${UPSTREAM:-openclaw}:latest
     # ... rest of configuration
 ```
 
@@ -531,10 +595,12 @@ This repository includes GitHub Actions workflows for:
 - **Security Scanning** - Trivy vulnerability scanning
 
 Images are published to:
-- `ghcr.io/n00b001/openclaw:latest`
-- `ghcr.io/n00b001/openclaw:<version>`
-- `ghcr.io/n00b001/picoclaw:latest`
-- `ghcr.io/n00b001/picoclaw:<version>`
+- `ghcr.io/xfanth/openclaw:latest`
+- `ghcr.io/xfanth/openclaw:<version>`
+- `ghcr.io/xfanth/picoclaw:latest`
+- `ghcr.io/xfanth/picoclaw:<version>`
+- `ghcr.io/xfanth/ironclaw:latest`
+- `ghcr.io/xfanth/ironclaw:<version>`
 
 ## License
 
@@ -585,8 +651,13 @@ The hooks include:
 - [PicoClaw GitHub](https://github.com/sipeed/picoclaw)
 - [Sipeed Website](https://www.sipeed.com/)
 
+### IronClaw
+- [IronClaw GitHub](https://github.com/nearai/ironclaw)
+- [NEAR AI Website](https://near.ai/)
+
 ## Acknowledgments
 
 - [OpenClaw](https://github.com/openclaw/openclaw) - The official AI agent gateway
 - [PicoClaw](https://github.com/sipeed/picoclaw) - Sipeed's lightweight AI agent gateway
+- [IronClaw](https://github.com/nearai/ironclaw) - NEAR AI's blockchain-integrated AI agent gateway
 - [coollabsio/openclaw](https://github.com/coollabsio/openclaw) - Inspiration for Docker setup
