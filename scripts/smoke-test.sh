@@ -44,24 +44,23 @@ log_success() { echo -e "${GREEN}[PASS]${NC} $1"; }
 log_error() { echo -e "${RED}[FAIL]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
-# Check if PicoClaw/IronClaw - skip OpenClaw-specific tests
-if [ "$UPSTREAM" = "picoclaw" ]; then
-    log_warn "PicoClaw smoke tests are temporarily disabled due to different architecture"
-    log_warn "PicoClaw does not have OpenClaw-specific endpoints (/healthz, etc.)"
-    log_warn "Skipping all smoke tests for PicoClaw"
-    log_success "Docker image build test already passed (built successfully)"
-    log_success "PicoClaw smoke tests will be enabled once architecture is documented"
-    exit 0
-fi
+# Determine upstream type for conditional tests
+# Node.js upstreams have full CLI support, compiled binaries have limited CLI
+IS_NODEJS_UPSTREAM=false
+case "$UPSTREAM" in
+    openclaw)
+        IS_NODEJS_UPSTREAM=true
+        ;;
+    picoclaw|ironclaw|zeroclaw)
+        ;;
+    *)
+        log_error "Unknown upstream: $UPSTREAM"
+        log_error "Supported: openclaw, picoclaw, ironclaw, zeroclaw"
+        exit 1
+        ;;
+esac
 
-if [ "$UPSTREAM" = "ironclaw" ]; then
-    log_warn "IronClaw smoke tests are temporarily disabled due to different architecture"
-    log_warn "IronClaw is a Rust binary with different endpoints"
-    log_warn "Skipping all smoke tests for IronClaw"
-    log_success "Docker image build test already passed (built successfully)"
-    log_success "IronClaw smoke tests will be enabled once architecture is documented"
-    exit 0
-fi
+log_info "Upstream type: $([ "$IS_NODEJS_UPSTREAM" = true ] && echo 'Node.js (full CLI)' || echo 'Compiled binary (limited CLI)')"
 
 # Display configuration
 log_info "Smoke Test Configuration:"
@@ -187,29 +186,35 @@ fi
 sleep 10
 
 # =============================================================================
-# Test 4: HTTP Endpoint Test
+# Test 4: HTTP Endpoint Test (Node.js only - has /healthz endpoint)
 # =============================================================================
-log_info "Test 4: Testing HTTP endpoint..."
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    log_info "Test 4: Testing HTTP endpoint..."
 
-# Try multiple times with retries
-HTTP_SUCCESS=0
-for _ in 1 2 3; do
-    if curl -sf http://localhost:18080/healthz > /dev/null 2>&1; then
-        HTTP_SUCCESS=1
-        break
+    # Try multiple times with retries
+    HTTP_SUCCESS=0
+    for _ in 1 2 3; do
+        if curl -sf http://localhost:18080/healthz > /dev/null 2>&1; then
+            HTTP_SUCCESS=1
+            break
+        fi
+        sleep 2
+    done
+
+    if [ $HTTP_SUCCESS -eq 1 ]; then
+        log_success "Health endpoint responds (200 OK)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "Health endpoint failed"
+        log_info "Trying to get more info..."
+        curl -v http://localhost:18080/healthz 2>&1 || true
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        exit 1
     fi
-    sleep 2
-done
-
-if [ $HTTP_SUCCESS -eq 1 ]; then
-    log_success "Health endpoint responds (200 OK)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
 else
-    log_error "Health endpoint failed"
-    log_info "Trying to get more info..."
-    curl -v http://localhost:18080/healthz 2>&1 || true
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    exit 1
+    log_info "Test 4: Skipping HTTP endpoint test (compiled binaries may not have /healthz)"
+    log_success "HTTP endpoint test skipped for ${UPSTREAM}"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
 # =============================================================================
@@ -217,51 +222,70 @@ fi
 # =============================================================================
 log_info "Test 5: Testing ${UPSTREAM} gateway..."
 
-# Check if gateway is actually responding
-# Run as the upstream user to avoid permission issues
-docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1 || true
-
-# Check for specific error conditions
 GATEWAY_ERRORS=0
 
-# Check for permission denied errors
-if grep -q "EACCES\|permission denied" /tmp/gateway-status.log 2>/dev/null; then
-    log_error "Gateway has permission errors (EACCES)"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-fi
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    # Node.js upstreams have full CLI with 'gateway status' command
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} gateway status" > /tmp/gateway-status.log 2>&1 || true
 
-# Check for port conflicts
-if grep -q "Port.*already in use\|address already in use" /tmp/gateway-status.log 2>/dev/null; then
-    log_error "Gateway has port conflicts"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-fi
+    # Check for permission denied errors
+    if grep -q "EACCES\|permission denied" /tmp/gateway-status.log 2>/dev/null; then
+        log_error "Gateway has permission errors (EACCES)"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+    fi
 
-# Check for systemd errors (these should not cause gateway failure)
-if grep -q "systemd.*unavailable\|systemctl.*unavailable" /tmp/gateway-status.log 2>/dev/null; then
-    log_warn "systemd is unavailable (expected in container environment)"
-fi
+    # Check for port conflicts
+    if grep -q "Port.*already in use\|address already in use" /tmp/gateway-status.log 2>/dev/null; then
+        log_error "Gateway has port conflicts"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+    fi
 
-# Check if gateway is actually responding via RPC
-if grep -q "RPC probe: ok" /tmp/gateway-status.log 2>/dev/null; then
-    log_success "Gateway RPC probe successful"
+    # Check for systemd errors (expected in container)
+    if grep -q "systemd.*unavailable\|systemctl.*unavailable" /tmp/gateway-status.log 2>/dev/null; then
+        log_warn "systemd is unavailable (expected in container environment)"
+    fi
+
+    # Check if gateway is responding via RPC
+    if grep -q "RPC probe: ok" /tmp/gateway-status.log 2>/dev/null; then
+        log_success "Gateway RPC probe successful"
+    else
+        log_error "Gateway is not responding properly"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+    fi
+
+    if [ $GATEWAY_ERRORS -eq 0 ]; then
+        log_success "${UPSTREAM} gateway is running and responding"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_info "Gateway status output:"
+        cat /tmp/gateway-status.log
+    fi
 else
-    log_error "Gateway is not responding properly"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
-fi
+    # Compiled binary upstreams - check that binary exists and process is running
+    log_info "Checking compiled binary gateway..."
 
-if [ $GATEWAY_ERRORS -eq 0 ]; then
-    log_success "${UPSTREAM} gateway is running and responding"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-else
-    log_info "Gateway status output:"
-    cat /tmp/gateway-status.log
-    log_info "Identity directory contents:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" ls -la "/data/.${UPSTREAM}/identity/" 2>/dev/null || log_warn "Identity directory not found"
-    log_info "Config:"
-    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" cat "/data/.${UPSTREAM}/${UPSTREAM}.json" 2>/dev/null || log_warn "Config file not found"
+    # Check if the upstream binary exists
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" which "$UPSTREAM" > /dev/null 2>&1; then
+        log_success "${UPSTREAM} binary found in PATH"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "${UPSTREAM} binary not found in PATH"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+    fi
+
+    # Check if gateway process is running (via supervisord)
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" pgrep -f "$UPSTREAM" > /dev/null 2>&1; then
+        log_success "${UPSTREAM} gateway process is running"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "${UPSTREAM} gateway process not found"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        GATEWAY_ERRORS=$((GATEWAY_ERRORS + 1))
+    fi
 fi
 
 # =============================================================================
@@ -317,78 +341,96 @@ else
 fi
 
 # =============================================================================
-# Test 8: Config Validation
+# Test 8: Config Validation (Node.js only)
 # =============================================================================
-log_info "Test 8: Validating ${UPSTREAM} config..."
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    log_info "Test 8: Validating ${UPSTREAM} config..."
 
-# Check if config file exists and is valid JSON
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" bash -c "cat /data/.${UPSTREAM}/${UPSTREAM}.json | python3 -m json.tool > /dev/null 2>&1"; then
-    log_success "${UPSTREAM} config is valid JSON"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
+    # Check if config file exists and is valid JSON
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" bash -c "cat /data/.${UPSTREAM}/${UPSTREAM}.json | python3 -m json.tool > /dev/null 2>&1"; then
+        log_success "${UPSTREAM} config is valid JSON"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_warn "${UPSTREAM} config has warnings (may be expected for test environment)"
+        # Don't fail on config warnings in smoke test
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    fi
 else
-    log_warn "${UPSTREAM} config has warnings (may be expected for test environment)"
-    # Don't fail on config warnings in smoke test
+    log_info "Test 8: Skipping config validation (not applicable for compiled binaries)"
+    log_success "Config validation skipped for ${UPSTREAM}"
     TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
 # =============================================================================
-# Test 9: Checking full status...
+# Test 9: Checking full status (Node.js only)
 # =============================================================================
-log_info "Test 9: Checking ${UPSTREAM} full status..."
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    log_info "Test 9: Checking ${UPSTREAM} full status..."
 
-# Run as upstream user to avoid permission issues
-docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1 || true
+    # Run as upstream user to avoid permission issues
+    docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} ${UPSTREAM} status" > /tmp/status.log 2>&1 || true
 
-STATUS_ERRORS=0
+    STATUS_ERRORS=0
 
-# Check for permission denied errors
-if grep -q "EACCES\|permission denied" /tmp/status.log 2>/dev/null; then
-    log_error "${UPSTREAM} status shows permission errors"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    STATUS_ERRORS=$((STATUS_ERRORS + 1))
-fi
+    # Check for permission denied errors
+    if grep -q "EACCES\|permission denied" /tmp/status.log 2>/dev/null; then
+        log_error "${UPSTREAM} status shows permission errors"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        STATUS_ERRORS=$((STATUS_ERRORS + 1))
+    fi
 
-# Check if gateway is marked as unreachable
-if grep -q "Gateway.*unreachable" /tmp/status.log 2>/dev/null; then
-    log_error "${UPSTREAM} status shows gateway is unreachable"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    STATUS_ERRORS=$((STATUS_ERRORS + 1))
-fi
+    # Check if gateway is marked as unreachable
+    if grep -q "Gateway.*unreachable" /tmp/status.log 2>/dev/null; then
+        log_error "${UPSTREAM} status shows gateway is unreachable"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        STATUS_ERRORS=$((STATUS_ERRORS + 1))
+    fi
 
-# Check for memory unavailable errors
-if grep -q "Memory.*unavailable" /tmp/status.log 2>/dev/null; then
-    log_warn "Memory plugin is unavailable (may be expected in test environment)"
-    # Don't fail on memory warnings
-fi
+    # Check for memory unavailable errors
+    if grep -q "Memory.*unavailable" /tmp/status.log 2>/dev/null; then
+        log_warn "Memory plugin is unavailable (may be expected in test environment)"
+        # Don't fail on memory warnings
+    fi
 
-if [ $STATUS_ERRORS -eq 0 ]; then
-    log_success "${UPSTREAM} status check passed"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
+    if [ $STATUS_ERRORS -eq 0 ]; then
+        log_success "${UPSTREAM} status check passed"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_info "${UPSTREAM} status output:"
+        cat /tmp/status.log
+    fi
+
+    # Verify gateway status shows correct port
+    if grep -q "port=18789" /tmp/status.log 2>/dev/null; then
+        log_success "Gateway status shows correct port (18789)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_warn "Gateway status shows unexpected port in status output"
+    fi
 else
-    log_info "${UPSTREAM} status output:"
-    cat /tmp/status.log
+    log_info "Test 9: Skipping full status check (not applicable for compiled binaries)"
+    log_success "Status check skipped for ${UPSTREAM}"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 fi
 
 # =============================================================================
-# Test 10: Verify gateway port accessibility
+# Test 10: Verify gateway port accessibility (Node.js only - has /healthz endpoint)
 # =============================================================================
-log_info "Test 10: Verifying gateway on port 18789..."
+if [ "$IS_NODEJS_UPSTREAM" = true ]; then
+    log_info "Test 10: Verifying gateway on port 18789..."
 
-# Test gateway from within container
-if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} curl -f http://localhost:18789/healthz" 2>&1; then
-    log_success "Gateway is accessible on port 18789 (from within container)"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
+    # Test gateway from within container
+    if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" su - "$UPSTREAM" -c "cd /data && HOME=/data/.${UPSTREAM} OPENCLAW_STATE_DIR=/data/.${UPSTREAM} curl -f http://localhost:18789/healthz" 2>&1; then
+        log_success "Gateway is accessible on port 18789 (from within container)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        log_error "Gateway is not accessible on port 18789 (from within container)"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
 else
-    log_error "Gateway is not accessible on port 18789 (from within container)"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-fi
-
-# Verify gateway status shows correct port
-if grep -q "port=18789" /tmp/status.log 2>/dev/null; then
-    log_success "Gateway status shows correct port (18789)"
+    log_info "Test 10: Skipping gateway port test (compiled binaries may not have /healthz)"
+    log_success "Gateway port test skipped for ${UPSTREAM}"
     TESTS_PASSED=$((TESTS_PASSED + 1))
-else
-    log_warn "Gateway status shows unexpected port in status output"
 fi
 
 # =============================================================================

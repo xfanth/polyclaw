@@ -85,7 +85,7 @@ jobs:
       image_tag: ${{ steps.meta.outputs.version }}
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -135,7 +135,7 @@ jobs:
     if: always() && needs.build.result == 'success'
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -338,7 +338,7 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -381,7 +381,7 @@ jobs:
        (needs.check-pr-status.result == 'success' && needs.check-pr-status.outputs.can_skip_build != 'true'))
     strategy:
       matrix:
-        upstream: [openclaw, picoclaw, ironclaw]
+        upstream: [openclaw, picoclaw, ironclaw, zeroclaw]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
