@@ -119,6 +119,10 @@ log_info "Workspace dir: $WORKSPACE_DIR"
 log_info "Gateway port: $GATEWAY_PORT"
 log_info "External port: $PORT"
 
+# Ensure identity directory exists with proper permissions
+mkdir -p "$STATE_DIR/identity"
+chmod 700 "$STATE_DIR/identity" 2>/dev/null || true
+
 # =============================================================================
 # Validate required environment variables
 # =============================================================================

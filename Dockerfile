@@ -332,7 +332,9 @@ RUN printf '%s\n' '#!/usr/bin/env bash' \
     && chmod +x /usr/local/bin/upstream
 
 # Set up directories with proper permissions
-RUN mkdir -p /data/.${UPSTREAM} /data/workspace /app/config /var/log/${UPSTREAM} \
+RUN mkdir -p /data/.${UPSTREAM}/identity /data/workspace /app/config /var/log/${UPSTREAM} \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /data/.${UPSTREAM} \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /data/workspace \
     && chown -R ${UPSTREAM}:${UPSTREAM} /var/log/${UPSTREAM} \
     && chown -R ${UPSTREAM}:${UPSTREAM} /var/log/nginx
 
