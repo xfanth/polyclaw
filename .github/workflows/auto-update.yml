@@ -1,7 +1,7 @@
 # =============================================================================
-# OpenClaw Docker Auto-Update Workflow
+# OpenClaw/PicoClaw/IronClaw/ZeroClaw Docker Auto-Update Workflow
 # =============================================================================
-# This workflow automatically rebuilds the Docker image when OpenClaw
+# This workflow automatically rebuilds the Docker image when any upstream
 # releases a new version or when main branch updates.
 #
 # REQUIREMENT: Set WORKFLOW_TOKEN secret with 'repo' and 'workflow' scopes
@@ -12,10 +12,8 @@
 name: Auto-Update Check
 
 on:
-  # Run daily at 2200 UTC
   schedule:
     - cron: '0 22 * * *'
-  # Allow manual triggering
   workflow_dispatch:
 
 env:
@@ -27,13 +25,9 @@ permissions:
   packages: write
 
 jobs:
-  # ===========================================================================
-  # Check for OpenClaw Updates
-  # ===========================================================================
-  check-update:
-    name: Check for OpenClaw Updates
+  check-openclaw:
+    name: Check OpenClaw Updates
     runs-on: blacksmith-2vcpu-ubuntu-2404
-
     outputs:
       tagged_has_update: ${{ steps.check.outputs.tagged_has_update }}
       tagged_version: ${{ steps.check.outputs.tagged_version }}
@@ -42,241 +36,691 @@ jobs:
       main_has_update: ${{ steps.check.outputs.main_has_update }}
       main_commit: ${{ steps.check.outputs.main_commit }}
       main_current_commit: ${{ steps.check.outputs.main_current_commit }}
-
     steps:
-      # -----------------------------------------------------------------------
-      # Checkout repository
-      # -----------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -----------------------------------------------------------------------
-      # Get latest OpenClaw tagged version and main commit
-      # -----------------------------------------------------------------------
-      - name: Get latest OpenClaw tagged version and main commit
+      - name: Check for updates
         id: check
         run: |
-          # Get latest release tag from OpenClaw repo
-          LATEST_TAG=$(
-            curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest \
-              | jq -r '.tag_name // "none"'
-          )
+          UPSTREAM="openclaw"
+          OWNER="openclaw"
+          REPO="openclaw"
+          COMMIT_FILE=".${UPSTREAM}-main-commit"
+          TAGGED_FILE=".${UPSTREAM}-tagged-commit"
+
+          LATEST_TAG=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/releases/latest | jq -r '.tag_name // "none"')
           echo "tagged_version=$LATEST_TAG" >> $GITHUB_OUTPUT
 
-          # Get commit hash for latest tag
           if [ "$LATEST_TAG" != "none" ]; then
-            TAGGED_COMMIT=$(
-              curl -s https://api.github.com/repos/openclaw/openclaw/git/refs/tags/$LATEST_TAG \
-                | jq -r '.object.sha // "none"'
-            )
+            TAGGED_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/git/refs/tags/$LATEST_TAG | jq -r '.object.sha // "none"')
             echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
           else
-            TAGGED_COMMIT="none"
-            echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
+            echo "tagged_commit=none" >> $GITHUB_OUTPUT
           fi
 
-          # Get the commit hash for main branch
-          MAIN_COMMIT=$(curl -s https://api.github.com/repos/openclaw/openclaw/commits/main | jq -r '.sha // "none"')
+          MAIN_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/commits/main | jq -r '.sha // "none"')
           echo "main_commit=$MAIN_COMMIT" >> $GITHUB_OUTPUT
 
-          # Get current tracked commits
-          if [ -f .openclaw-tagged-commit ]; then
-            TAGGED_CURRENT=$(cat .openclaw-tagged-commit)
+          if [ -f "$TAGGED_FILE" ]; then
+            TAGGED_CURRENT=$(cat "$TAGGED_FILE")
           else
             TAGGED_CURRENT="none"
           fi
           echo "tagged_current_commit=$TAGGED_CURRENT" >> $GITHUB_OUTPUT
 
-          if [ -f .openclaw-main-commit ]; then
-            MAIN_CURRENT=$(cat .openclaw-main-commit)
+          if [ -f "$COMMIT_FILE" ]; then
+            MAIN_CURRENT=$(cat "$COMMIT_FILE")
           else
             MAIN_CURRENT="none"
           fi
           echo "main_current_commit=$MAIN_CURRENT" >> $GITHUB_OUTPUT
 
-          # Check if tagged version update is needed
           if [ "$TAGGED_COMMIT" != "none" ] && [ "$TAGGED_COMMIT" != "$TAGGED_CURRENT" ]; then
             echo "tagged_has_update=true" >> $GITHUB_OUTPUT
-            echo "New tagged version available: $LATEST_TAG ($TAGGED_COMMIT) (current: $TAGGED_CURRENT)"
+            echo "New ${UPSTREAM} tagged version: $LATEST_TAG ($TAGGED_COMMIT)"
           else
             echo "tagged_has_update=false" >> $GITHUB_OUTPUT
-            echo "No tagged update needed. Current: $TAGGED_CURRENT"
+            echo "No ${UPSTREAM} tagged update needed"
           fi
 
-          # Check if main update is needed
           if [ "$MAIN_COMMIT" != "none" ] && [ "$MAIN_COMMIT" != "$MAIN_CURRENT" ]; then
             echo "main_has_update=true" >> $GITHUB_OUTPUT
-            echo "New main commit available: $MAIN_COMMIT (current: $MAIN_CURRENT)"
+            echo "New ${UPSTREAM} main commit: $MAIN_COMMIT"
           else
             echo "main_has_update=false" >> $GITHUB_OUTPUT
-            echo "No main update needed. Current: $MAIN_CURRENT"
+            echo "No ${UPSTREAM} main update needed"
           fi
 
-  # ===========================================================================
-  # Create Pull Request for Tagged Version
-  # ===========================================================================
-  create-tagged-pr:
-    name: Create Tagged Version PR
+  check-picoclaw:
+    name: Check PicoClaw Updates
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    needs: check-update
-    if: needs.check-update.outputs.tagged_has_update == 'true'
+    outputs:
+      tagged_has_update: ${{ steps.check.outputs.tagged_has_update }}
+      tagged_version: ${{ steps.check.outputs.tagged_version }}
+      tagged_commit: ${{ steps.check.outputs.tagged_commit }}
+      tagged_current_commit: ${{ steps.check.outputs.tagged_current_commit }}
+      main_has_update: ${{ steps.check.outputs.main_has_update }}
+      main_commit: ${{ steps.check.outputs.main_commit }}
+      main_current_commit: ${{ steps.check.outputs.main_current_commit }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      - name: Check for updates
+        id: check
+        run: |
+          UPSTREAM="picoclaw"
+          OWNER="sipeed"
+          REPO="picoclaw"
+          COMMIT_FILE=".${UPSTREAM}-main-commit"
+          TAGGED_FILE=".${UPSTREAM}-tagged-commit"
+
+          LATEST_TAG=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/releases/latest | jq -r '.tag_name // "none"')
+          echo "tagged_version=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+          if [ "$LATEST_TAG" != "none" ]; then
+            TAGGED_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/git/refs/tags/$LATEST_TAG | jq -r '.object.sha // "none"')
+            echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
+          else
+            echo "tagged_commit=none" >> $GITHUB_OUTPUT
+          fi
+
+          MAIN_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/commits/main | jq -r '.sha // "none"')
+          echo "main_commit=$MAIN_COMMIT" >> $GITHUB_OUTPUT
+
+          if [ -f "$TAGGED_FILE" ]; then
+            TAGGED_CURRENT=$(cat "$TAGGED_FILE")
+          else
+            TAGGED_CURRENT="none"
+          fi
+          echo "tagged_current_commit=$TAGGED_CURRENT" >> $GITHUB_OUTPUT
+
+          if [ -f "$COMMIT_FILE" ]; then
+            MAIN_CURRENT=$(cat "$COMMIT_FILE")
+          else
+            MAIN_CURRENT="none"
+          fi
+          echo "main_current_commit=$MAIN_CURRENT" >> $GITHUB_OUTPUT
+
+          if [ "$TAGGED_COMMIT" != "none" ] && [ "$TAGGED_COMMIT" != "$TAGGED_CURRENT" ]; then
+            echo "tagged_has_update=true" >> $GITHUB_OUTPUT
+            echo "New ${UPSTREAM} tagged version: $LATEST_TAG ($TAGGED_COMMIT)"
+          else
+            echo "tagged_has_update=false" >> $GITHUB_OUTPUT
+            echo "No ${UPSTREAM} tagged update needed"
+          fi
+
+          if [ "$MAIN_COMMIT" != "none" ] && [ "$MAIN_COMMIT" != "$MAIN_CURRENT" ]; then
+            echo "main_has_update=true" >> $GITHUB_OUTPUT
+            echo "New ${UPSTREAM} main commit: $MAIN_COMMIT"
+          else
+            echo "main_has_update=false" >> $GITHUB_OUTPUT
+            echo "No ${UPSTREAM} main update needed"
+          fi
+
+  check-ironclaw:
+    name: Check IronClaw Updates
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      tagged_has_update: ${{ steps.check.outputs.tagged_has_update }}
+      tagged_version: ${{ steps.check.outputs.tagged_version }}
+      tagged_commit: ${{ steps.check.outputs.tagged_commit }}
+      tagged_current_commit: ${{ steps.check.outputs.tagged_current_commit }}
+      main_has_update: ${{ steps.check.outputs.main_has_update }}
+      main_commit: ${{ steps.check.outputs.main_commit }}
+      main_current_commit: ${{ steps.check.outputs.main_current_commit }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for updates
+        id: check
+        run: |
+          UPSTREAM="ironclaw"
+          OWNER="nearai"
+          REPO="ironclaw"
+          COMMIT_FILE=".${UPSTREAM}-main-commit"
+          TAGGED_FILE=".${UPSTREAM}-tagged-commit"
+
+          LATEST_TAG=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/releases/latest | jq -r '.tag_name // "none"')
+          echo "tagged_version=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+          if [ "$LATEST_TAG" != "none" ]; then
+            TAGGED_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/git/refs/tags/$LATEST_TAG | jq -r '.object.sha // "none"')
+            echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
+          else
+            echo "tagged_commit=none" >> $GITHUB_OUTPUT
+          fi
+
+          MAIN_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/commits/main | jq -r '.sha // "none"')
+          echo "main_commit=$MAIN_COMMIT" >> $GITHUB_OUTPUT
+
+          if [ -f "$TAGGED_FILE" ]; then
+            TAGGED_CURRENT=$(cat "$TAGGED_FILE")
+          else
+            TAGGED_CURRENT="none"
+          fi
+          echo "tagged_current_commit=$TAGGED_CURRENT" >> $GITHUB_OUTPUT
+
+          if [ -f "$COMMIT_FILE" ]; then
+            MAIN_CURRENT=$(cat "$COMMIT_FILE")
+          else
+            MAIN_CURRENT="none"
+          fi
+          echo "main_current_commit=$MAIN_CURRENT" >> $GITHUB_OUTPUT
+
+          if [ "$TAGGED_COMMIT" != "none" ] && [ "$TAGGED_COMMIT" != "$TAGGED_CURRENT" ]; then
+            echo "tagged_has_update=true" >> $GITHUB_OUTPUT
+            echo "New ${UPSTREAM} tagged version: $LATEST_TAG ($TAGGED_COMMIT)"
+          else
+            echo "tagged_has_update=false" >> $GITHUB_OUTPUT
+            echo "No ${UPSTREAM} tagged update needed"
+          fi
+
+          if [ "$MAIN_COMMIT" != "none" ] && [ "$MAIN_COMMIT" != "$MAIN_CURRENT" ]; then
+            echo "main_has_update=true" >> $GITHUB_OUTPUT
+            echo "New ${UPSTREAM} main commit: $MAIN_COMMIT"
+          else
+            echo "main_has_update=false" >> $GITHUB_OUTPUT
+            echo "No ${UPSTREAM} main update needed"
+          fi
+
+  check-zeroclaw:
+    name: Check ZeroClaw Updates
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      tagged_has_update: ${{ steps.check.outputs.tagged_has_update }}
+      tagged_version: ${{ steps.check.outputs.tagged_version }}
+      tagged_commit: ${{ steps.check.outputs.tagged_commit }}
+      tagged_current_commit: ${{ steps.check.outputs.tagged_current_commit }}
+      main_has_update: ${{ steps.check.outputs.main_has_update }}
+      main_commit: ${{ steps.check.outputs.main_commit }}
+      main_current_commit: ${{ steps.check.outputs.main_current_commit }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for updates
+        id: check
+        run: |
+          UPSTREAM="zeroclaw"
+          OWNER="zeroclaw-labs"
+          REPO="zeroclaw"
+          COMMIT_FILE=".${UPSTREAM}-main-commit"
+          TAGGED_FILE=".${UPSTREAM}-tagged-commit"
+
+          LATEST_TAG=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/releases/latest | jq -r '.tag_name // "none"')
+          echo "tagged_version=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+          if [ "$LATEST_TAG" != "none" ]; then
+            TAGGED_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/git/refs/tags/$LATEST_TAG | jq -r '.object.sha // "none"')
+            echo "tagged_commit=$TAGGED_COMMIT" >> $GITHUB_OUTPUT
+          else
+            echo "tagged_commit=none" >> $GITHUB_OUTPUT
+          fi
+
+          MAIN_COMMIT=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/commits/main | jq -r '.sha // "none"')
+          echo "main_commit=$MAIN_COMMIT" >> $GITHUB_OUTPUT
+
+          if [ -f "$TAGGED_FILE" ]; then
+            TAGGED_CURRENT=$(cat "$TAGGED_FILE")
+          else
+            TAGGED_CURRENT="none"
+          fi
+          echo "tagged_current_commit=$TAGGED_CURRENT" >> $GITHUB_OUTPUT
+
+          if [ -f "$COMMIT_FILE" ]; then
+            MAIN_CURRENT=$(cat "$COMMIT_FILE")
+          else
+            MAIN_CURRENT="none"
+          fi
+          echo "main_current_commit=$MAIN_CURRENT" >> $GITHUB_OUTPUT
+
+          if [ "$TAGGED_COMMIT" != "none" ] && [ "$TAGGED_COMMIT" != "$TAGGED_CURRENT" ]; then
+            echo "tagged_has_update=true" >> $GITHUB_OUTPUT
+            echo "New ${UPSTREAM} tagged version: $LATEST_TAG ($TAGGED_COMMIT)"
+          else
+            echo "tagged_has_update=false" >> $GITHUB_OUTPUT
+            echo "No ${UPSTREAM} tagged update needed"
+          fi
+
+          if [ "$MAIN_COMMIT" != "none" ] && [ "$MAIN_COMMIT" != "$MAIN_CURRENT" ]; then
+            echo "main_has_update=true" >> $GITHUB_OUTPUT
+            echo "New ${UPSTREAM} main commit: $MAIN_COMMIT"
+          else
+            echo "main_has_update=false" >> $GITHUB_OUTPUT
+            echo "No ${UPSTREAM} main update needed"
+          fi
+
+  create-openclaw-tagged-pr:
+    name: Create OpenClaw Tagged PR
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: check-openclaw
+    if: needs.check-openclaw.outputs.tagged_has_update == 'true'
     permissions:
       contents: write
       pull-requests: write
-
     steps:
-      # -----------------------------------------------------------------------
-      # Checkout repository
-      # -----------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
 
-      # -----------------------------------------------------------------------
-      # Close existing tagged version PRs (superseded by this update)
-      # -----------------------------------------------------------------------
-      - name: Close existing tagged version PRs
+      - name: Close existing tagged PRs
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
-          echo "Checking for existing tagged version PRs..."
-          EXISTING_PRS=$(gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("auto-update/v")) | .number')
+          PATTERN="auto-update/openclaw-v"
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
           if [ -n "$EXISTING_PRS" ]; then
             for PR_NUM in $EXISTING_PRS; do
-              echo "Closing superseded PR #$PR_NUM"
               gh pr close "$PR_NUM" --comment "Superseded by new tagged version update PR"
             done
-          else
-            echo "No existing tagged version PRs to close"
           fi
 
-      # -----------------------------------------------------------------------
-      # Update version files and create PR
-      # -----------------------------------------------------------------------
-      - name: Update tagged version files
-        run: |
-          echo "${{ needs.check-update.outputs.tagged_commit }}" > .openclaw-tagged-commit
+      - name: Update tagged version file
+        run: echo "${{ needs.check-openclaw.outputs.tagged_commit }}" > .openclaw-tagged-commit
 
-      - name: Create Pull Request for Tagged Version
+      - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
-          branch: auto-update/${{ needs.check-update.outputs.tagged_version }}
-          title: "chore: update OpenClaw to ${{ needs.check-update.outputs.tagged_version }}"
+          branch: auto-update/openclaw-${{ needs.check-openclaw.outputs.tagged_version }}
+          title: "chore: update OpenClaw to ${{ needs.check-openclaw.outputs.tagged_version }}"
           body: |
             ## OpenClaw Tagged Version Update
 
-            This PR updates OpenClaw to tagged version `${{ needs.check-update.outputs.tagged_version }}`.
+            This PR updates OpenClaw to tagged version `${{ needs.check-openclaw.outputs.tagged_version }}`.
 
-            - **New Version:** `${{ needs.check-update.outputs.tagged_version }}`
-            - **New Commit:** `${{ needs.check-update.outputs.tagged_commit }}`
-            - **Previous Commit:** `${{ needs.check-update.outputs.tagged_current_commit }}`
+            - **New Version:** `${{ needs.check-openclaw.outputs.tagged_version }}`
+            - **New Commit:** `${{ needs.check-openclaw.outputs.tagged_commit }}`
+            - **Previous Commit:** `${{ needs.check-openclaw.outputs.tagged_current_commit }}`
 
             ### Changes
-            See [OpenClaw Release Notes](
-              https://github.com/openclaw/openclaw/releases/tag/${{ needs.check-update.outputs.tagged_version }}
-            )
+            See [OpenClaw Release Notes](https://github.com/openclaw/openclaw/releases/tag/${{ needs.check-openclaw.outputs.tagged_version }})
 
             ### Docker Images
-            Once this PR is merged and the build completes, the following image will be available:
-            - `ghcr.io/${{ github.repository }}:${{ needs.check-update.outputs.tagged_version }}`
-            - `ghcr.io/${{ github.repository }}:latest` (only if more recent than existing latest tag)
-
-            ### Verification
-            The Docker build workflow will automatically run on this PR, including:
-            - Smoke tests
-            - Security scans
-            - Container validation
-
-            Please review and merge if all checks pass.
+            Once merged: `ghcr.io/${{ github.repository }}:openclaw_${{ needs.check-openclaw.outputs.tagged_version }}`
 
             ---
             *This PR was automatically created by the auto-update workflow.*
-          commit-message: "chore: update OpenClaw to ${{ needs.check-update.outputs.tagged_version }}"
+          commit-message: "chore: update OpenClaw to ${{ needs.check-openclaw.outputs.tagged_version }}"
           labels: automated, update
           delete-branch: true
 
-  # ===========================================================================
-  # Create Pull Request for Main Branch
-  # ===========================================================================
-  create-main-pr:
-    name: Create Main Branch PR
+  create-openclaw-main-pr:
+    name: Create OpenClaw Main PR
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    needs: check-update
-    if: needs.check-update.outputs.main_has_update == 'true'
-
+    needs: check-openclaw
+    if: needs.check-openclaw.outputs.main_has_update == 'true'
     permissions:
       contents: write
       pull-requests: write
-
     steps:
-      # -----------------------------------------------------------------------
-      # Checkout repository
-      # -----------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
 
-      # -----------------------------------------------------------------------
-      # Close existing main branch PRs (superseded by this update)
-      # -----------------------------------------------------------------------
-      - name: Close existing main branch PRs
+      - name: Close existing main PRs
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
-          echo "Checking for existing main branch PRs..."
+          PATTERN="auto-update/openclaw-main-"
           EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
-            --jq '.[] | select(.headRefName | startswith("auto-update/oc_main-")) | .number')
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
           if [ -n "$EXISTING_PRS" ]; then
             for PR_NUM in $EXISTING_PRS; do
-              echo "Closing superseded PR #$PR_NUM"
               gh pr close "$PR_NUM" --comment "Superseded by newer main branch update PR"
             done
-          else
-            echo "No existing main branch PRs to close"
           fi
 
-      # -----------------------------------------------------------------------
-      # Update main commit file and create PR
-      # -----------------------------------------------------------------------
       - name: Update main commit file
-        run: |
-          echo "${{ needs.check-update.outputs.main_commit }}" > .openclaw-main-commit
+        run: echo "${{ needs.check-openclaw.outputs.main_commit }}" > .openclaw-main-commit
 
-      - name: Create Pull Request for Main Branch
+      - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
-          branch: auto-update/oc_main-${{ needs.check-update.outputs.main_commit }}
+          branch: auto-update/openclaw-main-${{ needs.check-openclaw.outputs.main_commit }}
           title: "chore: update OpenClaw to latest main"
           body: |
             ## OpenClaw Main Branch Update
 
-            This PR updates OpenClaw to the latest commit on the main branch.
-
-            - **New Commit:** `${{ needs.check-update.outputs.main_commit }}`
-            - **Previous Commit:** `${{ needs.check-update.outputs.main_current_commit }}`
-
-            ### Changes
-            This update tracks the latest development changes from the OpenClaw main branch.
+            - **New Commit:** `${{ needs.check-openclaw.outputs.main_commit }}`
+            - **Previous Commit:** `${{ needs.check-openclaw.outputs.main_current_commit }}`
 
             ### Docker Images
-            Once this PR is merged and the build completes, the following image will be available:
-            - `ghcr.io/${{ github.repository }}:oc_main` (from openclaw/openclaw main branch)
-
-            ### Verification
-            The Docker build workflow will automatically run on this PR, including:
-            - Smoke tests
-            - Security scans
-            - Container validation
-
-            Please review and merge if all checks pass.
+            Once merged: `ghcr.io/${{ github.repository }}:openclaw_main`
 
             ---
             *This PR was automatically created by the auto-update workflow.*
           commit-message: "chore: update OpenClaw to latest main commit"
+          labels: automated, update
+          delete-branch: true
+
+  create-picoclaw-tagged-pr:
+    name: Create PicoClaw Tagged PR
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: check-picoclaw
+    if: needs.check-picoclaw.outputs.tagged_has_update == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      - name: Close existing tagged PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          PATTERN="auto-update/picoclaw-v"
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              gh pr close "$PR_NUM" --comment "Superseded by new tagged version update PR"
+            done
+          fi
+
+      - name: Update tagged version file
+        run: echo "${{ needs.check-picoclaw.outputs.tagged_commit }}" > .picoclaw-tagged-commit
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          branch: auto-update/picoclaw-${{ needs.check-picoclaw.outputs.tagged_version }}
+          title: "chore: update PicoClaw to ${{ needs.check-picoclaw.outputs.tagged_version }}"
+          body: |
+            ## PicoClaw Tagged Version Update
+
+            This PR updates PicoClaw to tagged version `${{ needs.check-picoclaw.outputs.tagged_version }}`.
+
+            - **New Version:** `${{ needs.check-picoclaw.outputs.tagged_version }}`
+            - **New Commit:** `${{ needs.check-picoclaw.outputs.tagged_commit }}`
+            - **Previous Commit:** `${{ needs.check-picoclaw.outputs.tagged_current_commit }}`
+
+            ### Changes
+            See [PicoClaw Release Notes](https://github.com/sipeed/picoclaw/releases/tag/${{ needs.check-picoclaw.outputs.tagged_version }})
+
+            ### Docker Images
+            Once merged: `ghcr.io/${{ github.repository }}:picoclaw_${{ needs.check-picoclaw.outputs.tagged_version }}`
+
+            ---
+            *This PR was automatically created by the auto-update workflow.*
+          commit-message: "chore: update PicoClaw to ${{ needs.check-picoclaw.outputs.tagged_version }}"
+          labels: automated, update
+          delete-branch: true
+
+  create-picoclaw-main-pr:
+    name: Create PicoClaw Main PR
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: check-picoclaw
+    if: needs.check-picoclaw.outputs.main_has_update == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      - name: Close existing main PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          PATTERN="auto-update/picoclaw-main-"
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              gh pr close "$PR_NUM" --comment "Superseded by newer main branch update PR"
+            done
+          fi
+
+      - name: Update main commit file
+        run: echo "${{ needs.check-picoclaw.outputs.main_commit }}" > .picoclaw-main-commit
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          branch: auto-update/picoclaw-main-${{ needs.check-picoclaw.outputs.main_commit }}
+          title: "chore: update PicoClaw to latest main"
+          body: |
+            ## PicoClaw Main Branch Update
+
+            - **New Commit:** `${{ needs.check-picoclaw.outputs.main_commit }}`
+            - **Previous Commit:** `${{ needs.check-picoclaw.outputs.main_current_commit }}`
+
+            ### Docker Images
+            Once merged: `ghcr.io/${{ github.repository }}:picoclaw_main`
+
+            ---
+            *This PR was automatically created by the auto-update workflow.*
+          commit-message: "chore: update PicoClaw to latest main commit"
+          labels: automated, update
+          delete-branch: true
+
+  create-ironclaw-tagged-pr:
+    name: Create IronClaw Tagged PR
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: check-ironclaw
+    if: needs.check-ironclaw.outputs.tagged_has_update == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      - name: Close existing tagged PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          PATTERN="auto-update/ironclaw-v"
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              gh pr close "$PR_NUM" --comment "Superseded by new tagged version update PR"
+            done
+          fi
+
+      - name: Update tagged version file
+        run: echo "${{ needs.check-ironclaw.outputs.tagged_commit }}" > .ironclaw-tagged-commit
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          branch: auto-update/ironclaw-${{ needs.check-ironclaw.outputs.tagged_version }}
+          title: "chore: update IronClaw to ${{ needs.check-ironclaw.outputs.tagged_version }}"
+          body: |
+            ## IronClaw Tagged Version Update
+
+            This PR updates IronClaw to tagged version `${{ needs.check-ironclaw.outputs.tagged_version }}`.
+
+            - **New Version:** `${{ needs.check-ironclaw.outputs.tagged_version }}`
+            - **New Commit:** `${{ needs.check-ironclaw.outputs.tagged_commit }}`
+            - **Previous Commit:** `${{ needs.check-ironclaw.outputs.tagged_current_commit }}`
+
+            ### Changes
+            See [IronClaw Release Notes](https://github.com/nearai/ironclaw/releases/tag/${{ needs.check-ironclaw.outputs.tagged_version }})
+
+            ### Docker Images
+            Once merged: `ghcr.io/${{ github.repository }}:ironclaw_${{ needs.check-ironclaw.outputs.tagged_version }}`
+
+            ---
+            *This PR was automatically created by the auto-update workflow.*
+          commit-message: "chore: update IronClaw to ${{ needs.check-ironclaw.outputs.tagged_version }}"
+          labels: automated, update
+          delete-branch: true
+
+  create-ironclaw-main-pr:
+    name: Create IronClaw Main PR
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: check-ironclaw
+    if: needs.check-ironclaw.outputs.main_has_update == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      - name: Close existing main PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          PATTERN="auto-update/ironclaw-main-"
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              gh pr close "$PR_NUM" --comment "Superseded by newer main branch update PR"
+            done
+          fi
+
+      - name: Update main commit file
+        run: echo "${{ needs.check-ironclaw.outputs.main_commit }}" > .ironclaw-main-commit
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          branch: auto-update/ironclaw-main-${{ needs.check-ironclaw.outputs.main_commit }}
+          title: "chore: update IronClaw to latest main"
+          body: |
+            ## IronClaw Main Branch Update
+
+            - **New Commit:** `${{ needs.check-ironclaw.outputs.main_commit }}`
+            - **Previous Commit:** `${{ needs.check-ironclaw.outputs.main_current_commit }}`
+
+            ### Docker Images
+            Once merged: `ghcr.io/${{ github.repository }}:ironclaw_main`
+
+            ---
+            *This PR was automatically created by the auto-update workflow.*
+          commit-message: "chore: update IronClaw to latest main commit"
+          labels: automated, update
+          delete-branch: true
+
+  create-zeroclaw-tagged-pr:
+    name: Create ZeroClaw Tagged PR
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: check-zeroclaw
+    if: needs.check-zeroclaw.outputs.tagged_has_update == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      - name: Close existing tagged PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          PATTERN="auto-update/zeroclaw-v"
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              gh pr close "$PR_NUM" --comment "Superseded by new tagged version update PR"
+            done
+          fi
+
+      - name: Update tagged version file
+        run: echo "${{ needs.check-zeroclaw.outputs.tagged_commit }}" > .zeroclaw-tagged-commit
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          branch: auto-update/zeroclaw-${{ needs.check-zeroclaw.outputs.tagged_version }}
+          title: "chore: update ZeroClaw to ${{ needs.check-zeroclaw.outputs.tagged_version }}"
+          body: |
+            ## ZeroClaw Tagged Version Update
+
+            This PR updates ZeroClaw to tagged version `${{ needs.check-zeroclaw.outputs.tagged_version }}`.
+
+            - **New Version:** `${{ needs.check-zeroclaw.outputs.tagged_version }}`
+            - **New Commit:** `${{ needs.check-zeroclaw.outputs.tagged_commit }}`
+            - **Previous Commit:** `${{ needs.check-zeroclaw.outputs.tagged_current_commit }}`
+
+            ### Changes
+            See [ZeroClaw Release Notes](https://github.com/zeroclaw-labs/zeroclaw/releases/tag/${{ needs.check-zeroclaw.outputs.tagged_version }})
+
+            ### Docker Images
+            Once merged: `ghcr.io/${{ github.repository }}:zeroclaw_${{ needs.check-zeroclaw.outputs.tagged_version }}`
+
+            ---
+            *This PR was automatically created by the auto-update workflow.*
+          commit-message: "chore: update ZeroClaw to ${{ needs.check-zeroclaw.outputs.tagged_version }}"
+          labels: automated, update
+          delete-branch: true
+
+  create-zeroclaw-main-pr:
+    name: Create ZeroClaw Main PR
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: check-zeroclaw
+    if: needs.check-zeroclaw.outputs.main_has_update == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      - name: Close existing main PRs
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          PATTERN="auto-update/zeroclaw-main-"
+          EXISTING_PRS=$(gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"$PATTERN\")) | .number")
+          if [ -n "$EXISTING_PRS" ]; then
+            for PR_NUM in $EXISTING_PRS; do
+              gh pr close "$PR_NUM" --comment "Superseded by newer main branch update PR"
+            done
+          fi
+
+      - name: Update main commit file
+        run: echo "${{ needs.check-zeroclaw.outputs.main_commit }}" > .zeroclaw-main-commit
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          branch: auto-update/zeroclaw-main-${{ needs.check-zeroclaw.outputs.main_commit }}
+          title: "chore: update ZeroClaw to latest main"
+          body: |
+            ## ZeroClaw Main Branch Update
+
+            - **New Commit:** `${{ needs.check-zeroclaw.outputs.main_commit }}`
+            - **Previous Commit:** `${{ needs.check-zeroclaw.outputs.main_current_commit }}`
+
+            ### Docker Images
+            Once merged: `ghcr.io/${{ github.repository }}:zeroclaw_main`
+
+            ---
+            *This PR was automatically created by the auto-update workflow.*
+          commit-message: "chore: update ZeroClaw to latest main commit"
           labels: automated, update
           delete-branch: true

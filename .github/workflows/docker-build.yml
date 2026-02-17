@@ -211,14 +211,36 @@ jobs:
         id: determine-version
         run: |
           UPSTREAM="${{ matrix.upstream }}"
+          TAGGED_FILE=".${UPSTREAM}-tagged-commit"
+          MAIN_FILE=".${UPSTREAM}-main-commit"
 
-          # Determine upstream prefix for version strings
+          # Determine upstream owner/repo and prefix
           case "$UPSTREAM" in
-            openclaw) PREFIX="oc" ;;
-            picoclaw) PREFIX="pc" ;;
-            ironclaw) PREFIX="ic" ;;
-            zeroclaw) PREFIX="zc" ;;
-            *) PREFIX="${UPSTREAM:0:2}" ;;
+            openclaw)
+              PREFIX="oc"
+              OWNER="openclaw"
+              REPO="openclaw"
+              ;;
+            picoclaw)
+              PREFIX="pc"
+              OWNER="sipeed"
+              REPO="picoclaw"
+              ;;
+            ironclaw)
+              PREFIX="ic"
+              OWNER="nearai"
+              REPO="ironclaw"
+              ;;
+            zeroclaw)
+              PREFIX="zc"
+              OWNER="zeroclaw-labs"
+              REPO="zeroclaw"
+              ;;
+            *)
+              PREFIX="${UPSTREAM:0:2}"
+              OWNER="${{ matrix.github_owner }}"
+              REPO="${{ matrix.github_repo }}"
+              ;;
           esac
 
           # Determine xfanth/polyclaw repo tag
@@ -230,33 +252,28 @@ jobs:
 
           # Determine upstream version (for Dockerfile) and tag
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if [ "$UPSTREAM" = "openclaw" ]; then
-              LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name')
-              if [ "$LATEST_TAG" != "null" ] && [ -n "$LATEST_TAG" ]; then
-                UPSTREAM_VERSION="$LATEST_TAG"
-                UPSTREAM_TAG="openclaw_$LATEST_TAG"
-              else
-                UPSTREAM_VERSION="oc_main"
-                UPSTREAM_TAG="openclaw_main"
-              fi
+            LATEST_TAG=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/releases/latest | jq -r '.tag_name // empty')
+            if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
+              UPSTREAM_VERSION="$LATEST_TAG"
+              UPSTREAM_TAG="${UPSTREAM}_$LATEST_TAG"
             else
               UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           else
             BASE_COMMIT="${{ github.event.before }}"
-            TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
-            MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+            TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^${TAGGED_FILE}$" && echo "true" || echo "false")
+            MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^${MAIN_FILE}$" && echo "true" || echo "false")
 
             if [ "$TAGGED_CHANGED" = "true" ]; then
-              OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit 2>/dev/null || echo "")
-              if [ -n "$OPENCLAW_COMMIT" ]; then
-                TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
-                  jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
+              TRACKED_COMMIT=$(cat "$TAGGED_FILE" 2>/dev/null || echo "")
+              if [ -n "$TRACKED_COMMIT" ]; then
+                TAG=$(curl -s "https://api.github.com/repos/${OWNER}/${REPO}/git/refs/tags" | \
+                  jq -r --arg commit "$TRACKED_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
                   sed 's|refs/tags/||' | head -n1)
               fi
               if [ -z "$TAG" ]; then
-                TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
+                TAG=$(curl -s "https://api.github.com/repos/${OWNER}/${REPO}/releases/latest" | jq -r '.tag_name // empty')
               fi
               if [ -n "$TAG" ] && [ "$TAG" != "null" ]; then
                 UPSTREAM_VERSION="$TAG"
@@ -487,14 +504,36 @@ jobs:
         id: determine-version
         run: |
           UPSTREAM="${{ matrix.upstream }}"
+          TAGGED_FILE=".${UPSTREAM}-tagged-commit"
+          MAIN_FILE=".${UPSTREAM}-main-commit"
 
-          # Determine upstream prefix for version strings
+          # Determine upstream owner/repo and prefix
           case "$UPSTREAM" in
-            openclaw) PREFIX="oc" ;;
-            picoclaw) PREFIX="pc" ;;
-            ironclaw) PREFIX="ic" ;;
-            zeroclaw) PREFIX="zc" ;;
-            *) PREFIX="${UPSTREAM:0:2}" ;;
+            openclaw)
+              PREFIX="oc"
+              OWNER="openclaw"
+              REPO="openclaw"
+              ;;
+            picoclaw)
+              PREFIX="pc"
+              OWNER="sipeed"
+              REPO="picoclaw"
+              ;;
+            ironclaw)
+              PREFIX="ic"
+              OWNER="nearai"
+              REPO="ironclaw"
+              ;;
+            zeroclaw)
+              PREFIX="zc"
+              OWNER="zeroclaw-labs"
+              REPO="zeroclaw"
+              ;;
+            *)
+              PREFIX="${UPSTREAM:0:2}"
+              OWNER="${{ matrix.github_owner }}"
+              REPO="${{ matrix.github_repo }}"
+              ;;
           esac
 
           # Determine xfanth/polyclaw repo tag
@@ -506,33 +545,28 @@ jobs:
 
           # Determine upstream version (for Dockerfile) and tag
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if [ "$UPSTREAM" = "openclaw" ]; then
-              LATEST_TAG=$(curl -s https://api.github.com/repos/openclaw/openclaw/releases/latest | jq -r '.tag_name')
-              if [ "$LATEST_TAG" != "null" ] && [ -n "$LATEST_TAG" ]; then
-                UPSTREAM_VERSION="$LATEST_TAG"
-                UPSTREAM_TAG="openclaw_$LATEST_TAG"
-              else
-                UPSTREAM_VERSION="oc_main"
-                UPSTREAM_TAG="openclaw_main"
-              fi
+            LATEST_TAG=$(curl -s https://api.github.com/repos/${OWNER}/${REPO}/releases/latest | jq -r '.tag_name // empty')
+            if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
+              UPSTREAM_VERSION="$LATEST_TAG"
+              UPSTREAM_TAG="${UPSTREAM}_$LATEST_TAG"
             else
               UPSTREAM_VERSION="${PREFIX}_main"
               UPSTREAM_TAG="${UPSTREAM}_main"
             fi
           else
             BASE_COMMIT="${{ github.event.before }}"
-            TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-tagged-commit$" && echo "true" || echo "false")
-            MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^\.openclaw-main-commit$" && echo "true" || echo "false")
+            TAGGED_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^${TAGGED_FILE}$" && echo "true" || echo "false")
+            MAIN_CHANGED=$(git diff --name-only $BASE_COMMIT HEAD 2>/dev/null | grep -q "^${MAIN_FILE}$" && echo "true" || echo "false")
 
             if [ "$TAGGED_CHANGED" = "true" ]; then
-              OPENCLAW_COMMIT=$(cat .openclaw-tagged-commit 2>/dev/null || echo "")
-              if [ -n "$OPENCLAW_COMMIT" ]; then
-                TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/git/refs/tags" | \
-                  jq -r --arg commit "$OPENCLAW_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
+              TRACKED_COMMIT=$(cat "$TAGGED_FILE" 2>/dev/null || echo "")
+              if [ -n "$TRACKED_COMMIT" ]; then
+                TAG=$(curl -s "https://api.github.com/repos/${OWNER}/${REPO}/git/refs/tags" | \
+                  jq -r --arg commit "$TRACKED_COMMIT" '.[] | select(.object.sha == $commit or .object.object.sha == $commit) | .ref' | \
                   sed 's|refs/tags/||' | head -n1)
               fi
               if [ -z "$TAG" ]; then
-                TAG=$(curl -s "https://api.github.com/repos/openclaw/openclaw/releases/latest" | jq -r '.tag_name')
+                TAG=$(curl -s "https://api.github.com/repos/${OWNER}/${REPO}/releases/latest" | jq -r '.tag_name // empty')
               fi
               if [ -n "$TAG" ] && [ "$TAG" != "null" ]; then
                 UPSTREAM_VERSION="$TAG"
