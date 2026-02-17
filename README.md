@@ -1,22 +1,23 @@
-# OpenClaw/PicoClaw Docker
+# OpenClaw/PicoClaw/IronClaw/ZeroClaw Docker
 
 [![CodeQL](https://github.com/xfanth/polyclaw/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/xfanth/polyclaw/actions/workflows/github-code-scanning/codeql)
 [![Docker Build and Push](https://github.com/xfanth/polyclaw/actions/workflows/docker-build.yml/badge.svg)](https://github.com/xfanth/polyclaw/actions/workflows/docker-build.yml)
 [![Pre-Commit Checks](https://github.com/xfanth/polyclaw/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/xfanth/polyclaw/actions/workflows/pre-commit.yml)
-[![Docker Build](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml/badge.svg)](https://github.com/openclaw/openclaw-docker/actions/workflows/docker-build.yml)
-[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://ghcr.io/openclaw/openclaw-docker)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://ghcr.io/xfanth/openclaw)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A production-ready Docker setup for AI agent gateways. Supports both:
+A production-ready Docker setup for AI agent gateways. Supports:
 
 - **[OpenClaw](https://github.com/openclaw/openclaw)** - The official self-hosted AI agent gateway
 - **[PicoClaw](https://github.com/sipeed/picoclaw)** - Sipeed's lightweight AI agent gateway for embedded devices
+- **[IronClaw](https://github.com/nearai/ironclaw)** - NEAR AI's blockchain-integrated AI agent gateway
+- **[ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw)** - ZeroClaw Labs' AI agent gateway
 
 ## Features
 
 - **Debian Bookworm (LTS) Base** - Stable and secure foundation
-- **Multi-Architecture Support** - AMD64 and ARM64 builds
-- **Multiple Upstream Support** - Choose between OpenClaw or PicoClaw
+- **Multi-Architecture Support** - AMD64 builds
+- **Multiple Upstream Support** - Choose between OpenClaw, PicoClaw, IronClaw, or ZeroClaw
 - **Environment Variable Configuration** - Configure everything via `.env` file
 - **Persistent Data Storage** - Config, sessions, skills, plugins, and npm packages survive container restarts
 - **Nginx Reverse Proxy** - Built-in authentication and rate limiting
@@ -29,8 +30,8 @@ A production-ready Docker setup for AI agent gateways. Supports both:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/openclaw/openclaw-docker.git
-cd openclaw-docker
+git clone https://github.com/xfanth/polyclaw.git
+cd polyclaw
 ```
 
 ### 2. Configure Environment Variables
@@ -61,7 +62,7 @@ Open your browser to `http://localhost:8080` and log in with:
 
 ## Upstream Selection
 
-This Docker setup supports three upstream projects:
+This Docker setup supports four upstream projects:
 
 ### OpenClaw (Default)
 
@@ -100,21 +101,23 @@ UPSTREAM_VERSION=main
 - **GitHub:** https://github.com/nearai/ironclaw
 - **Ideal for:** Blockchain-integrated AI applications
 
+### ZeroClaw
+
+ZeroClaw Labs' AI agent gateway.
+
+```env
+UPSTREAM=zeroclaw
+UPSTREAM_VERSION=main
+```
+
+- **GitHub:** https://github.com/zeroclaw-labs/zeroclaw
+
 ### Switching Between Upstreams
 
 Simply change the `UPSTREAM` variable in your `.env` file:
 
 ```env
-# Use OpenClaw
 UPSTREAM=openclaw
-UPSTREAM_VERSION=main
-
-# Or use PicoClaw
-UPSTREAM=picoclaw
-UPSTREAM_VERSION=main
-
-# Or use IronClaw
-UPSTREAM=ironclaw
 UPSTREAM_VERSION=main
 ```
 
@@ -336,6 +339,24 @@ services:
     restart: unless-stopped
 ```
 
+### Minimal Setup (ZeroClaw)
+
+```yaml
+services:
+  gateway:
+    image: ghcr.io/xfanth/zeroclaw:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - UPSTREAM=zeroclaw
+      - ANTHROPIC_API_KEY=sk-ant-...
+      - AUTH_PASSWORD=secure-password
+      - OPENCLAW_GATEWAY_TOKEN=your-token
+    volumes:
+      - ./data:/data/.zeroclaw
+    restart: unless-stopped
+```
+
 ### Full Setup with All Features
 
 See the included [`docker-compose.yml`](docker-compose.yml) for a complete example with:
@@ -548,8 +569,8 @@ docker compose up -d
 
 ```bash
 # Clone repository
-git clone https://github.com/openclaw/openclaw-docker.git
-cd openclaw-docker
+git clone https://github.com/xfanth/polyclaw.git
+cd polyclaw
 
 # Build OpenClaw image
 docker build -t openclaw:local .
@@ -601,6 +622,8 @@ Images are published to:
 - `ghcr.io/xfanth/picoclaw:<version>`
 - `ghcr.io/xfanth/ironclaw:latest`
 - `ghcr.io/xfanth/ironclaw:<version>`
+- `ghcr.io/xfanth/zeroclaw:latest`
+- `ghcr.io/xfanth/zeroclaw:<version>`
 
 ## License
 
@@ -655,9 +678,13 @@ The hooks include:
 - [IronClaw GitHub](https://github.com/nearai/ironclaw)
 - [NEAR AI Website](https://near.ai/)
 
+### ZeroClaw
+- [ZeroClaw GitHub](https://github.com/zeroclaw-labs/zeroclaw)
+
 ## Acknowledgments
 
 - [OpenClaw](https://github.com/openclaw/openclaw) - The official AI agent gateway
 - [PicoClaw](https://github.com/sipeed/picoclaw) - Sipeed's lightweight AI agent gateway
 - [IronClaw](https://github.com/nearai/ironclaw) - NEAR AI's blockchain-integrated AI agent gateway
+- [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) - ZeroClaw Labs' AI agent gateway
 - [coollabsio/openclaw](https://github.com/coollabsio/openclaw) - Inspiration for Docker setup

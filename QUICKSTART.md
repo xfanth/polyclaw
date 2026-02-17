@@ -1,9 +1,9 @@
-# OpenClaw Docker - 5-Minute Quick Start
+# OpenClaw/PicoClaw/IronClaw Docker - 5-Minute Quick Start
 
 ## Step 1: Configure Environment
 
 ```bash
-cd openclaw-docker
+cd polyclaw
 cp .env.example .env
 ```
 

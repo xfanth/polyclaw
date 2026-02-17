@@ -23,7 +23,7 @@ This Docker image includes several security hardening measures:
 
 If you discover a security vulnerability, please report it by:
 
-1. **Email**: Open a GitHub Security Advisory at https://github.com/xfanth/openclaw/security/advisories
+1. **Email**: Open a GitHub Security Advisory at https://github.com/xfanth/polyclaw/security/advisories
 2. **Response time**: Expect an initial response within 48 hours
 3. **Disclosure**: We follow responsible disclosure - please do not publicly disclose until a fix is available
 

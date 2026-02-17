@@ -1,8 +1,8 @@
-# OpenClaw Docker - Quick Setup Guide
+# OpenClaw/PicoClaw/IronClaw Docker - Quick Setup Guide
 
 ## Overview
 
-This Docker setup provides a production-ready, 24/7 capable OpenClaw deployment with:
+This Docker setup provides a production-ready, 24/7 capable AI agent gateway deployment with:
 - **Debian Bookworm (LTS)** base image
 - **All environment variables** supported via `.env` file
 - **Persistent data** that survives container recreation
@@ -12,7 +12,7 @@ This Docker setup provides a production-ready, 24/7 capable OpenClaw deployment 
 ## File Structure
 
 ```
-openclaw-docker/
+polyclaw/
 ├── .github/workflows/
 │   ├── auto-update.yml       # Daily version checks
 │   ├── docker-build.yml      # Build & push to GHCR
@@ -229,6 +229,10 @@ ghcr.io/xfanth/openclaw:latest
 ghcr.io/xfanth/openclaw:v1.0.0
 ghcr.io/xfanth/picoclaw:latest
 ghcr.io/xfanth/picoclaw:v1.0.0
+ghcr.io/xfanth/ironclaw:latest
+ghcr.io/xfanth/ironclaw:v1.0.0
+ghcr.io/xfanth/zeroclaw:latest
+ghcr.io/xfanth/zeroclaw:v1.0.0
 ```
 
 ### 2. Auto-Update Check (`.github/workflows/auto-update.yml`)
@@ -349,3 +353,4 @@ docker compose up -d
 - [OpenClaw Documentation](https://docs.openclaw.ai/)
 - [OpenClaw GitHub](https://github.com/openclaw/openclaw)
 - [PicoClaw GitHub](https://github.com/sipeed/picoclaw)
+- [IronClaw GitHub](https://github.com/nearai/ironclaw)

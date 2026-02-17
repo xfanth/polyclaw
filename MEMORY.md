@@ -66,7 +66,7 @@ This workflow is NON-NEGOTIABLE for all code changes.
 
 ## Upstream Variants
 
-This project builds Docker images for three upstream variants:
+This project builds Docker images for four upstream variants:
 
 1. **OpenClaw** (`openclaw/openclaw`) - Node.js-based, official implementation
    - Built with `pnpm install && pnpm build`
@@ -82,6 +82,11 @@ This project builds Docker images for three upstream variants:
    - Built with `cargo build --release`
    - No UI components
    - Entry point: `/opt/ironclaw/ironclaw`
+
+4. **ZeroClaw** (`zeroclaw-labs/zeroclaw`) - Go-based implementation
+   - Built with `go build`
+   - No UI components
+   - Entry point: `/opt/zeroclaw/zeroclaw`
 
 When adding a new upstream:
 - Update `Dockerfile` clone logic with GitHub owner/repo
@@ -107,10 +112,10 @@ When the entrypoint script runs as root and then switches to the upstream user v
 
 - **Problem**: If an env var is not in the `--whitelist-environment` list, it gets lost when switching users
 - **Symptom**: Config shows correct values but the application doesn't see them because configure.js runs as the switched user
-- **Location**: `scripts/entrypoint.sh` line ~85 in the `su` command
+- **Location**: `scripts/entrypoint.sh` line ~93 in the `su` command
 - **Fix**: Add any new environment variables that configure.js reads to the whitelist
 
-Current whitelist (from `scripts/entrypoint.sh` line 85):
+Current whitelist (from `scripts/entrypoint.sh` line 93):
 ```
 UPSTREAM
 OPENCLAW_STATE_DIR
@@ -158,8 +163,8 @@ When adding new env vars to `configure.js`, **always add them to the whitelist**
 ## Repository and Package Naming
 
 - **Repository**: `xfanth/polyclaw` (formerly `xfanth/openclaw`)
-- **Docker Images**: `ghcr.io/xfanth/{upstream}` where upstream is `openclaw`, `picoclaw`, or `ironclaw`
-- **Image tags**: `xfanth_main`, `oc_main`, `pc_main`, `ic_main`, or version tags like `v2026.2.1`
+- **Docker Images**: `ghcr.io/xfanth/{upstream}` where upstream is `openclaw`, `picoclaw`, `ironclaw`, or `zeroclaw`
+- **Image tags**: `xfanth_main`, `oc_main`, `pc_main`, `ic_main`, `zc_main`, or version tags like `v2026.2.1`
 
 When renaming a repository:
 1. Update README.md badge URLs
@@ -207,7 +212,7 @@ The following tools are available:
 ## Project Structure
 
 ```
-openclaw-docker/
+polyclaw/
 ├── .github/workflows/    # CI/CD workflows
 ├── config/               # Example configurations
 ├── scripts/              # Entry point and configuration scripts

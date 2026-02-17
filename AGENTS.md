@@ -66,8 +66,6 @@ See https://astral.sh for more information about `uv`.
 - This was causing picoclaw build failures
 - **Always use official Go from go.dev for Docker builds**
 
-See https://astral.sh for more information about `uv`.
-
 ## Workflow
 
 ### Branching
@@ -153,13 +151,14 @@ git branch -d feature/description-of-change
 
 ## Supported Upstreams
 
-This project builds Docker images for three upstream variants:
+This project builds Docker images for four upstream variants:
 
 | Upstream | Language | Repo | Build Command |
 |----------|----------|------|---------------|
 | openclaw | Node.js | openclaw/openclaw | `pnpm build` |
 | picoclaw | Go | sipeed/picoclaw | `go build` |
 | ironclaw | Rust | nearai/ironclaw | `cargo build --release` |
+| zeroclaw | Go | zeroclaw-labs/zeroclaw | `go build` |
 
 When modifying CI workflows that use the upstream matrix, update ALL of:
 - `.github/workflows/docker-build.yml` (build, smoke-test, security-scan, push-to-ghcr jobs)
