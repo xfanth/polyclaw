@@ -2,18 +2,41 @@
 // =============================================================================
 // OpenClaw Configuration Generator
 // =============================================================================
-// Generates openclaw.json from environment variables
+// Generates config from environment variables for all upstream types
+// - OpenClaw: ~/.openclaw/openclaw.json (Node.js format)
+// - PicoClaw: ~/.picoclaw/config.json (Go format)
+// - ZeroClaw: ~/.zeroclaw/config.json (Rust format)
+// - IronClaw: ~/.ironclaw/config.json (Rust format)
 // =============================================================================
 
 const fs = require('fs');
 const path = require('path');
 
-const STATE_DIR = (process.env.OPENCLAW_STATE_DIR || '/data/.openclaw').replace(/\/+$/, '');
+const UPSTREAM = process.env.UPSTREAM || 'openclaw';
+const STATE_DIR = (process.env.OPENCLAW_STATE_DIR || `/data/.${UPSTREAM}`).replace(/\/+$/, '');
 const WORKSPACE_DIR = (process.env.OPENCLAW_WORKSPACE_DIR || '/data/workspace').replace(/\/+$/, '');
-const CONFIG_FILE = process.env.OPENCLAW_CONFIG_PATH || path.join(STATE_DIR, 'openclaw.json');
 
+// Config file path differs by upstream type:
+// - OpenClaw uses OPENCLAW_CONFIG_PATH or STATE_DIR/openclaw.json
+// - PicoClaw/ZeroClaw/IronClaw use ~/.picoclaw/config.json pattern
+//   But since we set HOME to STATE_DIR, they look for STATE_DIR/.picoclaw/config.json
+//   So we need to create a nested directory structure or use config.json directly
+let CONFIG_FILE;
+if (UPSTREAM === 'openclaw') {
+    CONFIG_FILE = process.env.OPENCLAW_CONFIG_PATH || path.join(STATE_DIR, `${UPSTREAM}.json`);
+} else {
+    // For Go/Rust binaries, they expect $HOME/.${UPSTREAM}/config.json
+    // Since HOME is set to STATE_DIR in entrypoint, they look for STATE_DIR/.${UPSTREAM}/config.json
+    // We create this nested structure
+    const nestedDir = path.join(STATE_DIR, `.${UPSTREAM}`);
+    fs.mkdirSync(nestedDir, { recursive: true });
+    CONFIG_FILE = path.join(nestedDir, 'config.json');
+}
+
+console.log('[configure] upstream:', UPSTREAM);
 console.log('[configure] state dir:', STATE_DIR);
 console.log('[configure] workspace dir:', WORKSPACE_DIR);
+console.log('[configure] config file:', CONFIG_FILE);
 
 fs.mkdirSync(STATE_DIR, { recursive: true });
 fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
@@ -41,7 +64,6 @@ const PROVIDER_URLS = {
 };
 
 // Default models per provider
-// Models are objects with id and name fields
 const PROVIDER_MODELS = {
     anthropic: [{ id: 'claude-sonnet-4-5-20250929', name: 'claude-sonnet-4-5-20250929' }],
     openai: [{ id: 'gpt-4o', name: 'gpt-4o' }],
@@ -55,7 +77,7 @@ const PROVIDER_MODELS = {
     copilot: [{ id: 'gpt-4o', name: 'gpt-4o' }],
 };
 
-function buildConfig() {
+function buildOpenClawConfig() {
     const config = {
         agents: {
             defaults: {
@@ -64,14 +86,12 @@ function buildConfig() {
         }
     };
 
-    // Primary model
     if (process.env.OPENCLAW_PRIMARY_MODEL) {
         config.agents.defaults.model = {
             primary: process.env.OPENCLAW_PRIMARY_MODEL
         };
     }
 
-    // Providers
     const providers = {};
     const providerKeys = {
         anthropic: process.env.ANTHROPIC_API_KEY,
@@ -104,7 +124,6 @@ function buildConfig() {
         config.models = { providers };
     }
 
-    // Gateway
     config.gateway = {
         mode: 'local'
     };
@@ -115,7 +134,6 @@ function buildConfig() {
         config.gateway.bind = process.env.OPENCLAW_GATEWAY_BIND;
     }
 
-    // Control UI
     config.gateway.controlUi = {};
 
     const allowedOriginsValue = process.env.OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS || '';
@@ -130,7 +148,6 @@ function buildConfig() {
         config.gateway.controlUi.allowInsecureAuth = true;
     }
 
-    // Browser - at root level, not under tools
     if (process.env.BROWSER_CDP_URL) {
         config.browser = {
             enabled: true,
@@ -144,7 +161,6 @@ function buildConfig() {
         };
     }
 
-    // Channels
     if (process.env.WHATSAPP_ENABLED === 'true' || process.env.WHATSAPP_DM_POLICY) {
         config.channels = config.channels || {};
         config.channels.whatsapp = {
@@ -179,7 +195,6 @@ function buildConfig() {
         };
     }
 
-    // Hooks
     if (process.env.HOOKS_ENABLED === 'true') {
         config.hooks = {
             enabled: true,
@@ -191,6 +206,118 @@ function buildConfig() {
     return config;
 }
 
+function buildPicoClawConfig() {
+    // PicoClaw config format (Go)
+    // See: https://github.com/sipeed/picoclaw
+    const primaryModel = process.env.OPENCLAW_PRIMARY_MODEL || 'glm-4.7';
+    const provider = primaryModel.includes('/') ? primaryModel.split('/')[0] : 'zhipu';
+    const model = primaryModel.includes('/') ? primaryModel.split('/')[1] : primaryModel;
+
+    const config = {
+        agents: {
+            defaults: {
+                workspace: `${STATE_DIR}/workspace`,
+                restrict_to_workspace: true,
+                model: model,
+                max_tokens: 8192,
+                temperature: 0.7,
+                max_tool_iterations: 20
+            }
+        },
+        providers: {},
+        gateway: {
+            host: '127.0.0.1',
+            port: 18789
+        },
+        tools: {
+            web: {
+                brave: {
+                    enabled: false,
+                    api_key: '',
+                    max_results: 5
+                },
+                duckduckgo: {
+                    enabled: true,
+                    max_results: 5
+                }
+            },
+            cron: {
+                exec_timeout_minutes: 5
+            }
+        },
+        heartbeat: {
+            enabled: true,
+            interval: 30
+        },
+        channels: {}
+    };
+
+    // Map API keys to PicoClaw provider format
+    const providerKeys = {
+        openrouter: process.env.OPENROUTER_API_KEY,
+        anthropic: process.env.ANTHROPIC_API_KEY,
+        openai: process.env.OPENAI_API_KEY,
+        gemini: process.env.GEMINI_API_KEY,
+        zhipu: process.env.ZAI_API_KEY,
+        groq: process.env.GROQ_API_KEY,
+    };
+
+    for (const [name, apiKey] of Object.entries(providerKeys)) {
+        if (apiKey) {
+            config.providers[name] = {
+                api_key: apiKey
+            };
+            if (PROVIDER_URLS[name]) {
+                config.providers[name].api_base = PROVIDER_URLS[name];
+            }
+        }
+    }
+
+    if (process.env.TELEGRAM_BOT_TOKEN) {
+        config.channels.telegram = {
+            enabled: true,
+            token: process.env.TELEGRAM_BOT_TOKEN,
+            allow_from: []
+        };
+    }
+
+    if (process.env.DISCORD_BOT_TOKEN) {
+        config.channels.discord = {
+            enabled: true,
+            token: process.env.DISCORD_BOT_TOKEN,
+            allow_from: []
+        };
+    }
+
+    return config;
+}
+
+function buildZeroClawConfig() {
+    // ZeroClaw config format (Rust) - similar to PicoClaw
+    return buildPicoClawConfig();
+}
+
+function buildIronClawConfig() {
+    // IronClaw config format (Rust) - similar to PicoClaw
+    return buildPicoClawConfig();
+}
+
+function buildConfig() {
+    switch (UPSTREAM) {
+        case 'openclaw':
+            return buildOpenClawConfig();
+        case 'picoclaw':
+            return buildPicoClawConfig();
+        case 'zeroclaw':
+            return buildZeroClawConfig();
+        case 'ironclaw':
+            return buildIronClawConfig();
+        default:
+            console.log(`[configure] Unknown upstream ${UPSTREAM}, using OpenClaw format`);
+            return buildOpenClawConfig();
+    }
+}
+
 const config = buildConfig();
 
 const configJson = JSON.stringify(config, null, 2);
@@ -198,7 +325,7 @@ fs.writeFileSync(CONFIG_FILE, configJson, 'utf8');
 console.log('[configure] wrote config to', CONFIG_FILE);
 
 // Backup
-const backupFile = path.join(STATE_DIR, 'openclaw.json.backup');
+const backupFile = path.join(STATE_DIR, `${UPSTREAM}.json.backup`);
 fs.writeFileSync(backupFile, configJson, 'utf8');
 
 try {
