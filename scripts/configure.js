@@ -298,8 +298,11 @@ function buildZeroClawConfig() {
 }
 
 function buildIronClawConfig() {
-    // IronClaw config format (Rust) - similar to PicoClaw
-    return buildPicoClawConfig();
+    // IronClaw uses TOML config (settings.toml) and requires PostgreSQL
+    // It cannot use JSON config. Return empty object - IronClaw handles its own config via `ironclaw onboard`
+    console.log('[configure] IronClaw uses TOML config and PostgreSQL - skipping JSON config generation');
+    console.log('[configure] IronClaw should be configured via: ironclaw onboard');
+    return {};
 }
 
 function buildConfig() {
