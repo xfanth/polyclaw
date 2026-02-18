@@ -307,48 +307,14 @@ function buildPicoClawConfig() {
 
 function buildZeroClawConfig() {
     // ZeroClaw config format (Rust) - uses TOML
-    // See: https://github.com/zeroclaw-labs/zeroclaw
+    // See: https://github.com/zeroclaw-labs/zeroclaw/blob/main/dev/config.template.toml
+    // ZeroClaw uses a flat config structure with top-level fields
     const primaryModel = process.env.OPENCLAW_PRIMARY_MODEL || 'zhipu/glm-4.7';
     const parts = primaryModel.split('/');
     const provider = parts.length > 1 ? parts[0] : 'zhipu';
     const model = parts.length > 1 ? parts.slice(1).join('/') : primaryModel;
 
-    const config = {
-        agents: {
-            defaults: {
-                workspace: `${STATE_DIR}/workspace`,
-                restrict_to_workspace: true,
-                provider: provider,
-                model: model,
-                max_tokens: 8192,
-                temperature: 0.7,
-                max_tool_iterations: 20
-            }
-        },
-        providers: {},
-        gateway: {
-            host: '127.0.0.1',
-            port: 18789
-        },
-        tools: {
-            web: {
-                duckduckgo: {
-                    enabled: true,
-                    max_results: 5
-                }
-            },
-            cron: {
-                exec_timeout_minutes: 5
-            }
-        },
-        heartbeat: {
-            enabled: true,
-            interval_minutes: 30
-        },
-        channels: {}
-    };
-
-    // Map API keys to ZeroClaw provider format
+    // Find the first available API key
     const providerKeys = {
         openrouter: process.env.OPENROUTER_API_KEY,
         anthropic: process.env.ANTHROPIC_API_KEY,
@@ -358,32 +324,31 @@ function buildZeroClawConfig() {
         groq: process.env.GROQ_API_KEY,
     };
 
-    for (const [name, apiKey] of Object.entries(providerKeys)) {
-        if (apiKey) {
-            config.providers[name] = {
-                api_key: apiKey
-            };
-            if (PROVIDER_URLS[name]) {
-                config.providers[name].api_base = PROVIDER_URLS[name];
+    let apiKey = '';
+    let defaultProvider = provider;
+    for (const [name, key] of Object.entries(providerKeys)) {
+        if (key) {
+            apiKey = key;
+            if (provider === name || !providerKeys[provider]) {
+                defaultProvider = name;
             }
+            break;
         }
     }
 
-    if (process.env.TELEGRAM_BOT_TOKEN) {
-        config.channels.telegram = {
-            enabled: true,
-            token: process.env.TELEGRAM_BOT_TOKEN,
-            allow_from: []
-        };
-    }
-
-    if (process.env.DISCORD_BOT_TOKEN) {
-        config.channels.discord = {
-            enabled: true,
-            token: process.env.DISCORD_BOT_TOKEN,
-            allow_from: []
-        };
-    }
+    const config = {
+        workspace_dir: `${STATE_DIR}/workspace`,
+        config_path: `${STATE_DIR}/.zeroclaw/config.toml`,
+        api_key: apiKey,
+        default_provider: defaultProvider,
+        default_model: model,
+        default_temperature: 0.7,
+        gateway: {
+            port: 18789,
+            host: '127.0.0.1',
+            allow_public_bind: false
+        }
+    };
 
     return config;
 }
