@@ -102,12 +102,9 @@ services:
       - OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH=${OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH:-}
 
       # ---------------------------------------------------------------------
-      # Storage Paths (dynamically set based on upstream)
+      # Storage Paths (dynamically set by entrypoint based on detected upstream)
       # ---------------------------------------------------------------------
-      - OPENCLAW_STATE_DIR=/data/.${UPSTREAM:-openclaw}
       - OPENCLAW_WORKSPACE_DIR=/data/workspace
-      - OPENCLAW_CONFIG_PATH=/data/.${UPSTREAM:-openclaw}/${UPSTREAM:-openclaw}.json
-      - OPENCLAW_CUSTOM_CONFIG=/app/config/${UPSTREAM:-openclaw}.json
 
       # ---------------------------------------------------------------------
       # Browser Tool Configuration
