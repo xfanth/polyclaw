@@ -80,13 +80,20 @@ jobs:
           echo "$CHANGED_FILES"
 
           # Paths that affect ALL upstreams (common infrastructure)
-          COMMON_PATHS="scripts/ .github/workflows/ docker-compose nginx.conf lib/ config/ .dockerignore"
+          # Note: scripts/ is NOT here because configure-{upstream}.js is upstream-specific
+          COMMON_PATHS=".github/workflows/ docker-compose nginx.conf lib/ config/ .dockerignore"
 
-          # Check if base Dockerfile changed (builds all)
+          # Check if base Dockerfile or base configure.js changed (builds all)
           BUILD_ALL="false"
           if echo "$CHANGED_FILES" | grep -q "^Dockerfile$"; then
             BUILD_ALL="true"
             echo "Base Dockerfile changed - building all upstreams"
+          elif echo "$CHANGED_FILES" | grep -q "^scripts/configure\.js$"; then
+            BUILD_ALL="true"
+            echo "Base configure.js changed - building all upstreams"
+          elif echo "$CHANGED_FILES" | grep -qE "^scripts/(entrypoint|smoke-test|healthcheck)\.sh$"; then
+            BUILD_ALL="true"
+            echo "Shared script changed - building all upstreams"
           fi
 
           # Check if any common paths changed
@@ -116,10 +123,10 @@ jobs:
 
           for file in $CHANGED_FILES; do
             case "$file" in
-              Dockerfile-openclaw|.openclaw-*|openclaw-*) BUILD_OPENCLAW="true" ;;
-              Dockerfile-picoclaw|.picoclaw-*|picoclaw-*) BUILD_PICOCLAW="true" ;;
-              Dockerfile-ironclaw|.ironclaw-*|ironclaw-*) BUILD_IRONCLAW="true" ;;
-              Dockerfile-zeroclaw|.zeroclaw-*|zeroclaw-*) BUILD_ZEROCLAW="true" ;;
+              Dockerfile-openclaw|scripts/configure-openclaw.js|.openclaw-*|openclaw-*) BUILD_OPENCLAW="true" ;;
+              Dockerfile-picoclaw|scripts/configure-picoclaw.js|.picoclaw-*|picoclaw-*) BUILD_PICOCLAW="true" ;;
+              Dockerfile-ironclaw|scripts/configure-ironclaw.js|.ironclaw-*|ironclaw-*) BUILD_IRONCLAW="true" ;;
+              Dockerfile-zeroclaw|scripts/configure-zeroclaw.js|.zeroclaw-*|zeroclaw-*) BUILD_ZEROCLAW="true" ;;
             esac
           done
 
