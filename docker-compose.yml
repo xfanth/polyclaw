@@ -38,9 +38,7 @@ services:
 
     # Ports
     ports:
-      - "${PORT:-8080}:${PORT:-8080}"
-      # Uncomment to expose gateway directly (not recommended)
-      # - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"
+      - "${OPENCLAW_EXTERNAL_GATEWAY_PORT:-8080}:${OPENCLAW_EXTERNAL_GATEWAY_PORT:-8080}"
 
     # Environment Variables
     environment:
@@ -97,7 +95,8 @@ services:
       # Gateway Configuration
       # ---------------------------------------------------------------------
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
-      - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
+      - OPENCLAW_EXTERNAL_GATEWAY_PORT=${OPENCLAW_EXTERNAL_GATEWAY_PORT:-8080}
+      - OPENCLAW_INTERNAL_GATEWAY_PORT=${OPENCLAW_INTERNAL_GATEWAY_PORT:-18789}
       - OPENCLAW_GATEWAY_BIND=${OPENCLAW_GATEWAY_BIND:-loopback}
       - OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=${OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS:-}
       - OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH=${OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH:-}
@@ -175,18 +174,13 @@ services:
       - GOG_KEYRING_PASSWORD=${GOG_KEYRING_PASSWORD:-}
 
       # ---------------------------------------------------------------------
-      # Port Configuration
-      # ---------------------------------------------------------------------
-      - PORT=${PORT:-8080}
-
-      # ---------------------------------------------------------------------
       # Node Environment
       # ---------------------------------------------------------------------
       - NODE_ENV=production
 
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:$${OPENCLAW_EXTERNAL_GATEWAY_PORT:-8080}/healthz"]
       interval: 30s
       timeout: 10s
       start_period: 60s
