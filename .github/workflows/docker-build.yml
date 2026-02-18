@@ -123,31 +123,28 @@ jobs:
           fi
 
           echo "Found merged PR: $PR_INFO"
-          PR_NUM=$(echo "$PR_INFO" | jq -r '.number')
-          HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headBranch')
           PR_HEAD_SHA=$(echo "$PR_INFO" | jq -r '.headSha')
 
           WORKFLOW_RUNS=$(gh run list \
             --repo "${{ github.repository }}" \
             --workflow "docker-build.yml" \
-            --branch "$HEAD_BRANCH" \
             --event "pull_request" \
             --status success \
-            --limit 10 \
-            --json headBranch,conclusion,databaseId)
+            --limit 50 \
+            --json headSha,conclusion,databaseId,displayTitle)
 
-          LATEST_RUN=$(echo "$WORKFLOW_RUNS" | \
-            jq --arg branch "$HEAD_BRANCH" \
-            'sort_by(.databaseId) | reverse | .[0] | select(.headBranch == $branch)')
+          MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | \
+            jq --arg sha "$PR_HEAD_SHA" \
+            'sort_by(.databaseId) | reverse | .[] | select(.headSha == $sha)' | head -1)
 
-          if [ -z "$LATEST_RUN" ]; then
-            echo "No successful PR workflow runs found"
+          if [ -z "$MATCHING_RUN" ]; then
+            echo "No successful PR workflow runs found with matching head SHA"
             echo "can_skip_build=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          RUN_ID=$(echo "$LATEST_RUN" | jq -r '.databaseId')
-          echo "Found successful run: $RUN_ID"
+          RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId')
+          echo "Found successful run with matching SHA: $RUN_ID"
 
           ARTIFACTS=$(gh api repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts --jq '.artifacts | length')
           if [ "$ARTIFACTS" -eq 0 ]; then
@@ -156,20 +153,9 @@ jobs:
             exit 0
           fi
 
-          RUN_HEAD_SHA=$(gh run view "$RUN_ID" --repo "${{ github.repository }}" --json headSha --jq '.headSha')
-          echo "Run head SHA: $RUN_HEAD_SHA"
-          echo "PR head SHA at merge: $PR_HEAD_SHA"
-
-          if [ "$RUN_HEAD_SHA" = "$PR_HEAD_SHA" ]; then
-            echo "PR head SHA matches run - code unchanged since test"
-            echo "can_skip_build=true" >> $GITHUB_OUTPUT
-            echo "pr_run_id=$RUN_ID" >> $GITHUB_OUTPUT
-          else
-            echo "PR was updated after testing (head SHA mismatch)"
-            echo "  Run head: $RUN_HEAD_SHA"
-            echo "  PR head: $PR_HEAD_SHA"
-            echo "can_skip_build=false" >> $GITHUB_OUTPUT
-          fi
+          echo "Found run $RUN_ID with $ARTIFACTS artifacts matching PR head SHA $PR_HEAD_SHA"
+          echo "can_skip_build=true" >> $GITHUB_OUTPUT
+          echo "pr_run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
   build:
     name: Build (${{ matrix.upstream }})
