@@ -376,14 +376,13 @@ RUN printf '%s\n' "UPSTREAM=${UPSTREAM}" "UPSTREAM_VERSION=${UPSTREAM_VERSION}" 
     && chown ${UPSTREAM}:${UPSTREAM} /app/VERSION
 
 # Environment variable defaults
+# Note: OPENCLAW_STATE_DIR, HOME are set by entrypoint.sh based on detected upstream
 ENV UPSTREAM=${UPSTREAM}
 ENV PORT=8080
 ENV OPENCLAW_GATEWAY_PORT=18789
-ENV OPENCLAW_STATE_DIR=/data/.${UPSTREAM}
 ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 ENV OPENCLAW_CONFIG_PATH=/data/.${UPSTREAM}/${UPSTREAM}.json
 ENV OPENCLAW_CUSTOM_CONFIG=/app/config/${UPSTREAM}.json
-ENV HOME=/data/.${UPSTREAM}
 ENV PATH="/data/.${UPSTREAM}/.bun/bin:/root/.bun/bin:${PATH}"
 
 # Expose ports
