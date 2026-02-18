@@ -127,7 +127,7 @@ if [ "$(id -u)" = "0" ]; then
     sync  # Ensure all chown operations complete before proceeding
 
     log_info "Switching to $UPSTREAM user..."
-    exec su -s /bin/bash --whitelist-environment=HOME,UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_GATEWAY_PORT,PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY,ZEROCLAW_API_KEY,ZEROCLAW_PROVIDER,ZEROCLAW_MODEL,ZEROCLAW_WORKSPACE,ZEROCLAW_TEMPERATURE,ZEROCLAW_GATEWAY_PORT,ZEROCLAW_GATEWAY_HOST,ZEROCLAW_WHATSAPP_APP_SECRET "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
+    exec su -s /bin/bash --whitelist-environment=HOME,UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_EXTERNAL_GATEWAY_PORT,OPENCLAW_INTERNAL_GATEWAY_PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY,ZEROCLAW_API_KEY,ZEROCLAW_PROVIDER,ZEROCLAW_MODEL,ZEROCLAW_WORKSPACE,ZEROCLAW_TEMPERATURE,ZEROCLAW_GATEWAY_HOST,ZEROCLAW_WHATSAPP_APP_SECRET "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
 fi
 
 # =============================================================================
@@ -135,8 +135,8 @@ fi
 # =============================================================================
 STATE_DIR="${OPENCLAW_STATE_DIR:-$DEFAULT_STATE_DIR}"
 WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
-GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
-PORT="${PORT:-8080}"
+EXTERNAL_GATEWAY_PORT="${OPENCLAW_EXTERNAL_GATEWAY_PORT:-8080}"
+INTERNAL_GATEWAY_PORT="${OPENCLAW_INTERNAL_GATEWAY_PORT:-18789}"
 
 log_info "Starting $UPSTREAM Docker Container"
 
@@ -150,8 +150,8 @@ fi
 
 log_info "State dir: $STATE_DIR"
 log_info "Workspace dir: $WORKSPACE_DIR"
-log_info "Gateway port: $GATEWAY_PORT"
-log_info "External port: $PORT"
+log_info "External gateway port: $EXTERNAL_GATEWAY_PORT"
+log_info "Internal gateway port: $INTERNAL_GATEWAY_PORT"
 
 # Ensure identity directory exists with proper permissions
 mkdir -p "$STATE_DIR/identity"
@@ -281,7 +281,7 @@ tee "/etc/nginx/sites-available/$UPSTREAM" > /dev/null << EOF
 
 # Upstream for $UPSTREAM Gateway
 upstream ${UPSTREAM}_gateway {
-    server 127.0.0.1:$GATEWAY_PORT;
+    server 127.0.0.1:$INTERNAL_GATEWAY_PORT;
     keepalive 32;
 }
 
@@ -289,7 +289,7 @@ upstream ${UPSTREAM}_gateway {
 limit_req_zone \$binary_remote_addr zone=${UPSTREAM}_limit:10m rate=10r/s;
 
 server {
-    listen $PORT default_server;
+    listen $EXTERNAL_GATEWAY_PORT default_server;
     server_name _;
 
     # Security headers
@@ -445,13 +445,13 @@ mkdir -p /var/log/supervisor
 # - IronClaw: ironclaw (no gateway subcommand - just runs agent with all channels)
 case "$UPSTREAM" in
     openclaw)
-        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT} --bind loopback"
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${INTERNAL_GATEWAY_PORT} --bind loopback"
         ;;
     picoclaw)
-        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${INTERNAL_GATEWAY_PORT}"
         ;;
     zeroclaw)
-        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${GATEWAY_PORT}"
+        GATEWAY_CMD="/usr/local/bin/$CLI_NAME gateway --port ${INTERNAL_GATEWAY_PORT}"
         ;;
     ironclaw)
         # IronClaw has no 'gateway' subcommand - just run the binary
@@ -499,8 +499,8 @@ EOF
 # =============================================================================
 # Start supervisord (which manages nginx and the upstream gateway)
 # =============================================================================
-log_success "Starting $UPSTREAM Gateway on port $GATEWAY_PORT"
-log_info "Web interface available at: http://localhost:$PORT"
+log_success "Starting $UPSTREAM Gateway (external: $EXTERNAL_GATEWAY_PORT, internal: $INTERNAL_GATEWAY_PORT)"
+log_info "Web interface available at: http://localhost:$EXTERNAL_GATEWAY_PORT"
 log_info "Gateway token: ${OPENCLAW_GATEWAY_TOKEN:0:8}..."
 log_info "Starting supervisord to manage services..."
 

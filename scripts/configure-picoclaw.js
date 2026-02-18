@@ -11,6 +11,7 @@ function buildConfig(STATE_DIR, WORKSPACE_DIR, parseList, PROVIDER_URLS, PROVIDE
     const primaryModel = process.env.OPENCLAW_PRIMARY_MODEL || 'glm-4.7';
     const provider = primaryModel.includes('/') ? primaryModel.split('/')[0] : 'zhipu';
     const model = primaryModel.includes('/') ? primaryModel.split('/')[1] : primaryModel;
+    const gatewayPort = parseInt(process.env.OPENCLAW_INTERNAL_GATEWAY_PORT || '18789', 10);
 
     const config = {
         agents: {
@@ -26,7 +27,7 @@ function buildConfig(STATE_DIR, WORKSPACE_DIR, parseList, PROVIDER_URLS, PROVIDE
         providers: {},
         gateway: {
             host: '127.0.0.1',
-            port: 18789
+            port: gatewayPort
         },
         tools: {
             web: {

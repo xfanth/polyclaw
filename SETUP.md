@@ -200,10 +200,11 @@ SLACK_DM_POLICY=pairing
 SLACK_GROUP_POLICY=open
 ```
 
-### Port
+### Ports
 
 ```env
-PORT=8080                       # External web port
+OPENCLAW_EXTERNAL_GATEWAY_PORT=8080   # External port (nginx, callers use this)
+OPENCLAW_INTERNAL_GATEWAY_PORT=18789  # Internal port (gateway binary)
 ```
 
 ## GitHub Actions CI/CD

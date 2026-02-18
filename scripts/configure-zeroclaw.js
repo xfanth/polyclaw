@@ -34,7 +34,7 @@ function buildConfig(STATE_DIR, WORKSPACE_DIR, parseList, PROVIDER_URLS, PROVIDE
         }
     }
 
-    const gatewayPort = parseInt(process.env.OPENCLAW_GATEWAY_PORT || '18789', 10);
+    const gatewayPort = parseInt(process.env.OPENCLAW_INTERNAL_GATEWAY_PORT || '18789', 10);
     const gatewayHost = process.env.ZEROCLAW_GATEWAY_HOST || '127.0.0.1';
 
     const config = {

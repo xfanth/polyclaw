@@ -418,9 +418,9 @@ services:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OPENCLAW_GATEWAY_TOKEN` | Bearer token for API | Auto-generated |
-| `OPENCLAW_GATEWAY_PORT` | Internal gateway port | `18789` |
+| `OPENCLAW_EXTERNAL_GATEWAY_PORT` | External port (nginx, callers use this) | `8080` |
+| `OPENCLAW_INTERNAL_GATEWAY_PORT` | Internal port (gateway binary) | `18789` |
 | `OPENCLAW_GATEWAY_BIND` | Bind mode (loopback/lan) | `loopback` |
-| `PORT` | External port (nginx) | `8080` |
 
 ### Models
 
