@@ -135,7 +135,7 @@ jobs:
 
           MATCHING_RUN=$(echo "$WORKFLOW_RUNS" | \
             jq --arg sha "$PR_HEAD_SHA" \
-            'sort_by(.databaseId) | reverse | .[] | select(.headSha == $sha)' | head -1)
+            'first(sort_by(.databaseId) | reverse | .[] | select(.headSha == $sha))')
 
           if [ -z "$MATCHING_RUN" ]; then
             echo "No successful PR workflow runs found with matching head SHA"
