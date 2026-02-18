@@ -33,10 +33,10 @@ if (UPSTREAM === 'openclaw') {
     CONFIG_FILE = null;
     CONFIG_FORMAT = 'none';
 } else if (UPSTREAM === 'zeroclaw') {
-    // ZeroClaw expects TOML config at $HOME/.zeroclaw/config.toml
-    const nestedDir = path.join(STATE_DIR, `.${UPSTREAM}`);
-    fs.mkdirSync(nestedDir, { recursive: true });
-    CONFIG_FILE = path.join(nestedDir, 'config.toml');
+    // ZeroClaw expects TOML config at ~/.zeroclaw/config.toml
+    // STATE_DIR is /data/.zeroclaw, so config is directly in STATE_DIR
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    CONFIG_FILE = path.join(STATE_DIR, 'config.toml');
     CONFIG_FORMAT = 'toml';
 } else {
     // PicoClaw and other Go binaries use JSON
@@ -336,6 +336,9 @@ function buildZeroClawConfig() {
         }
     }
 
+    const gatewayPort = parseInt(process.env.OPENCLAW_GATEWAY_PORT || '18789', 10);
+    const gatewayHost = process.env.ZEROCLAW_GATEWAY_HOST || '127.0.0.1';
+
     const config = {
         workspace_dir: `${STATE_DIR}/workspace`,
         // ZeroClaw expects config at ~/.zeroclaw/config.toml, and STATE_DIR is /data/.zeroclaw
@@ -346,8 +349,8 @@ function buildZeroClawConfig() {
         default_model: model,
         default_temperature: 0.7,
         gateway: {
-            port: 18789,
-            host: '127.0.0.1',
+            port: gatewayPort,
+            host: gatewayHost,
             allow_public_bind: false
         }
     };
