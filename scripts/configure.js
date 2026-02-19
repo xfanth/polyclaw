@@ -9,6 +9,15 @@
 const fs = require('fs');
 const path = require('path');
 
+// Activity logging
+let activity;
+try {
+  activity = require('../lib/activity.js');
+} catch (e) {
+  // Activity logging not available
+  activity = null;
+}
+
 const UPSTREAM = process.env.UPSTREAM || 'openclaw';
 const STATE_DIR = (process.env.OPENCLAW_STATE_DIR || `/data/.${UPSTREAM}`).replace(/\/+$/, '');
 const WORKSPACE_DIR = (process.env.OPENCLAW_WORKSPACE_DIR || '/data/workspace').replace(/\/+$/, '');
@@ -172,6 +181,33 @@ function writeConfig(config, configInfo, upstream) {
         return;
     }
 
+    // Log configuration change before writing
+    if (activity) {
+        try {
+            // Get current config for comparison (if exists)
+            let oldConfig = null;
+            if (fs.existsSync(configFile)) {
+                const currentContent = fs.readFileSync(configFile, 'utf8');
+                oldConfig = configFormat === 'toml' ? currentContent : JSON.parse(currentContent);
+            }
+            
+            // Log the change
+            const changes = {
+                config_file: configFile,
+                format: configFormat,
+                upstream: upstream,
+            };
+            
+            if (oldConfig) {
+                changes.previous_config_exists = true;
+            }
+            
+            activity.logConfigChange('system', changes, 'cli');
+        } catch (e) {
+            // Ignore logging errors
+        }
+    }
+
     let configContent;
     let outputFormat;
     if (configFormat === 'toml') {
@@ -219,6 +255,20 @@ function main() {
 
     const config = buildConfig(STATE_DIR, WORKSPACE_DIR, parseList, PROVIDER_URLS, PROVIDER_MODELS);
     writeConfig(config, configInfo, UPSTREAM);
+
+    // Log configuration completion
+    if (activity) {
+        try {
+            activity.logInfo('system', 'Configuration completed', {
+                upstream: UPSTREAM,
+                state_dir: STATE_DIR,
+                workspace_dir: WORKSPACE_DIR,
+                config_file: configInfo.configFile,
+            }, 'cli');
+        } catch (e) {
+            // Ignore logging errors
+        }
+    }
 
     console.log('[configure] configuration complete');
 }

@@ -22,6 +22,7 @@ A production-ready Docker setup for AI agent gateways. Supports:
 - **Persistent Data Storage** - Config, sessions, skills, plugins, and npm packages survive container restarts
 - **Nginx Reverse Proxy** - Built-in authentication and rate limiting
 - **Browser Automation** - Optional Chrome sidecar for web automation
+- **Admin Activity Dashboard** - Monitor user activities, configuration changes, and system events
 - **Health Checks & Auto-Restart** - Designed for 24/7 operation
 - **Security Hardened** - Non-root user, minimal capabilities, security headers
 
@@ -59,6 +60,27 @@ docker compose up -d
 Open your browser to `http://localhost:8080` and log in with:
 - Username: `admin` (or your `AUTH_USERNAME`)
 - Password: Your `AUTH_PASSWORD`
+
+### 5. Access the Admin Dashboard (Optional)
+
+The admin dashboard provides activity monitoring and user tracking:
+
+```bash
+# Access the dashboard
+open http://localhost:8888/admin
+```
+
+Features:
+- View user activities (logins, config changes, saves)
+- Filter by user, activity type, and date range
+- Activity statistics and trends
+- Real-time activity monitoring
+
+Configure in `.env`:
+```env
+ACTIVITY_LOG_ENABLED=true
+ADMIN_API_PORT=8888
+```
 
 ## Upstream Selection
 

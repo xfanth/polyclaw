@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Admin Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        input, select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 150px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .activities-section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .activities-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .activities-header h2 {
+            font-size: 18px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            color: #666;
+            text-transform: uppercase;
+            border-bottom: 2px solid #eee;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .timestamp {
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .user {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .activity-type {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .activity-login { background: #d4edda; color: #155724; }
+        .activity-logout { background: #f8d7da; color: #721c24; }
+        .activity-save { background: #d1ecf1; color: #0c5460; }
+        .activity-load { background: #e2e3e5; color: #383d41; }
+        .activity-config_change { background: #fff3cd; color: #856404; }
+        .activity-input_change { background: #d6d8db; color: #1b1e21; }
+        .activity-error { background: #f5c6cb; color: #721c24; }
+        .activity-warning { background: #ffeeba; color: #856404; }
+        .activity-info { background: #bee5eb; color: #0c5460; }
+
+        .details {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .details.expanded {
+            white-space: normal;
+            word-break: break-all;
+        }
+
+        .expand-btn {
+            background: none;
+            border: none;
+            color: #3498db;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 0;
+        }
+
+        .source {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .pagination {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .pagination button {
+            padding: 8px 16px;
+        }
+
+        .pagination button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Activity Admin Dashboard</h1>
+            <div class="subtitle">Monitor user activities and system events</div>
+        </header>
+
+        <div class="stats-grid" id="stats">
+            <div class="stat-card">
+                <h3>Total Activities (7 days)</h3>
+                <div class="stat-value" id="totalActivities">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Unique Users</h3>
+                <div class="stat-value" id="uniqueUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Most Common Activity</h3>
+                <div class="stat-value" id="topActivity">-</div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>User</label>
+                    <input type="text" id="filterUser" placeholder="Filter by user...">
+                </div>
+                <div class="filter-group">
+                    <label>Activity Type</label>
+                    <select id="filterType">
+                        <option value="">All Types</option>
+                        <option value="login">Login</option>
+                        <option value="logout">Logout</option>
+                        <option value="save">Save</option>
+                        <option value="load">Load</option>
+                        <option value="config_change">Config Change</option>
+                        <option value="input_change">Input Change</option>
+                        <option value="error">Error</option>
+                        <option value="warning">Warning</option>
+                        <option value="info">Info</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Start Date</label>
+                    <input type="datetime-local" id="filterStart">
+                </div>
+                <div class="filter-group">
+                    <label>End Date</label>
+                    <input type="datetime-local" id="filterEnd">
+                </div>
+                <div class="filter-group">
+                    <label>&nbsp;</label>
+                    <button onclick="loadActivities()">Apply Filters</button>
+                </div>
+                <div class="filter-group">
+                    <label>&nbsp;</label>
+                    <button onclick="resetFilters()">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="activities-section">
+            <div class="activities-header">
+                <h2>Recent Activities</h2>
+                <button onclick="refreshData()">Refresh</button>
+            </div>
+            <div id="activitiesContent">
+                <div class="loading">Loading activities...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/admin';
+        let currentOffset = 0;
+        const LIMIT = 50;
+
+        async function fetchActivities() {
+            const params = new URLSearchParams();
+            params.append('limit', LIMIT);
+            params.append('offset', currentOffset);
+
+            const user = document.getElementById('filterUser').value;
+            const type = document.getElementById('filterType').value;
+            const start = document.getElementById('filterStart').value;
+            const end = document.getElementById('filterEnd').value;
+
+            if (user) params.append('user', user);
+            if (type) params.append('type', type);
+            if (start) params.append('start', new Date(start).toISOString());
+            if (end) params.append('end', new Date(end).toISOString());
+
+            const response = await fetch(`${API_BASE}/activities?${params}`);
+            if (!response.ok) throw new Error('Failed to fetch activities');
+            return await response.json();
+        }
+
+        async function fetchStats() {
+            const response = await fetch(`${API_BASE}/stats`);
+            if (!response.ok) throw new Error('Failed to fetch stats');
+            return await response.json();
+        }
+
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        }
+
+        function formatDetails(details) {
+            if (!details || Object.keys(details).length === 0) {
+                return '-';
+            }
+            const json = JSON.stringify(details);
+            if (json.length > 50) {
+                return `<span class="details" title="${json.replace(/"/g, '&quot;')}">${json.substring(0, 50)}... <button class="expand-btn" onclick="toggleDetails(this)">expand</button></span>`;
+            }
+            return json;
+        }
+
+        function toggleDetails(btn) {
+            const span = btn.parentElement;
+            span.classList.toggle('expanded');
+            btn.textContent = span.classList.contains('expanded') ? 'collapse' : 'expand';
+        }
+
+        function renderActivities(activities) {
+            const container = document.getElementById('activitiesContent');
+
+            if (activities.length === 0) {
+                container.innerHTML = '<div class="empty-state">No activities found</div>';
+                return;
+            }
+
+            const rows = activities.map(activity => `
+                <tr>
+                    <td class="timestamp">${formatTimestamp(activity.timestamp)}</td>
+                    <td class="user">${activity.user}</td>
+                    <td><span class="activity-type activity-${activity.activity}">${activity.activity}</span></td>
+                    <td>${activity.description || '-'}</td>
+                    <td class="details">${formatDetails(activity.details)}</td>
+                    <td class="source">${activity.source}</td>
+                </tr>
+            `).join('');
+
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Activity</th>
+                            <th>Description</th>
+                            <th>Details</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <div class="pagination">
+                    <button onclick="previousPage()" ${currentOffset === 0 ? 'disabled' : ''}>Previous</button>
+                    <span>Page ${Math.floor(currentOffset / LIMIT) + 1}</span>
+                    <button onclick="nextPage()" ${activities.length < LIMIT ? 'disabled' : ''}>Next</button>
+                </div>
+            `;
+        }
+
+        function updateStats(stats) {
+            document.getElementById('totalActivities').textContent = stats.total_activities;
+            document.getElementById('uniqueUsers').textContent = stats.unique_users;
+
+            const activityTypes = stats.activity_types || {};
+            const topActivity = Object.entries(activityTypes)
+                .sort((a, b) => b[1] - a[1])[0];
+            document.getElementById('topActivity').textContent = topActivity ? topActivity[0] : '-';
+        }
+
+        async function loadActivities() {
+            const container = document.getElementById('activitiesContent');
+            container.innerHTML = '<div class="loading">Loading activities...</div>';
+
+            try {
+                const activities = await fetchActivities();
+                renderActivities(activities);
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const stats = await fetchStats();
+                updateStats(stats);
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        function previousPage() {
+            if (currentOffset >= LIMIT) {
+                currentOffset -= LIMIT;
+                loadActivities();
+            }
+        }
+
+        function nextPage() {
+            currentOffset += LIMIT;
+            loadActivities();
+        }
+
+        function resetFilters() {
+            document.getElementById('filterUser').value = '';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterStart').value = '';
+            document.getElementById('filterEnd').value = '';
+            currentOffset = 0;
+            loadActivities();
+        }
+
+        function refreshData() {
+            currentOffset = 0;
+            loadStats();
+            loadActivities();
+        }
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadActivities();
+        });
+    </script>
+</body>
+</html>

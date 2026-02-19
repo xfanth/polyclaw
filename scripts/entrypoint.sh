@@ -239,7 +239,7 @@ NGINX_EOF
     nginx -t || log_warn "Nginx configuration test had issues"
 
     log_info "Switching to $UPSTREAM user..."
-    exec su -s /bin/bash --whitelist-environment=HOME,UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_EXTERNAL_GATEWAY_PORT,OPENCLAW_INTERNAL_GATEWAY_PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY,ZEROCLAW_API_KEY,ZEROCLAW_PROVIDER,ZEROCLAW_MODEL,ZEROCLAW_WORKSPACE,ZEROCLAW_TEMPERATURE,ZEROCLAW_GATEWAY_HOST,ZEROCLAW_WHATSAPP_APP_SECRET "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
+    exec su -s /bin/bash --whitelist-environment=HOME,UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_EXTERNAL_GATEWAY_PORT,OPENCLAW_INTERNAL_GATEWAY_PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY,ZEROCLAW_API_KEY,ZEROCLAW_PROVIDER,ZEROCLAW_MODEL,ZEROCLAW_WORKSPACE,ZEROCLAW_TEMPERATURE,ZEROCLAW_GATEWAY_HOST,ZEROCLAW_WHATSAPP_APP_SECRET,ACTIVITY_LOG_ENABLED,ACTIVITY_LOG_DIR,ADMIN_API_PORT "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
 fi
 
 # =============================================================================
@@ -268,6 +268,12 @@ log_info "Internal gateway port: $INTERNAL_GATEWAY_PORT"
 # Ensure identity directory exists with proper permissions
 mkdir -p "$STATE_DIR/identity"
 chmod 700 "$STATE_DIR/identity" 2>/dev/null || true
+
+# Create activity log directory
+ACTIVITY_LOG_DIR="${ACTIVITY_LOG_DIR:-$STATE_DIR/activity}"
+mkdir -p "$ACTIVITY_LOG_DIR"
+chmod 755 "$ACTIVITY_LOG_DIR" 2>/dev/null || true
+log_info "Activity log directory: $ACTIVITY_LOG_DIR"
 
 # =============================================================================
 # Validate required environment variables
@@ -465,7 +471,16 @@ autorestart=true
 priority=20
 stdout_logfile=/var/log/supervisor/$UPSTREAM.log
 stderr_logfile=/var/log/supervisor/$UPSTREAM-error.log
-environment=HOME="${SUPERVISOR_HOME}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",OPENCLAW_INTERNAL_GATEWAY_PORT="${INTERNAL_GATEWAY_PORT}",NODE_ENV="production"
+environment=HOME="${SUPERVISOR_HOME}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",OPENCLAW_INTERNAL_GATEWAY_PORT="${INTERNAL_GATEWAY_PORT}",NODE_ENV="production",ACTIVITY_LOG_ENABLED="${ACTIVITY_LOG_ENABLED:-true}",ACTIVITY_LOG_DIR="${ACTIVITY_LOG_DIR}"
+
+[program:admin-api]
+command=python3 /app/admin/api_server.py
+autostart=true
+autorestart=true
+priority=30
+stdout_logfile=/var/log/supervisor/admin-api.log
+stderr_logfile=/var/log/supervisor/admin-api-error.log
+environment=ACTIVITY_LOG_ENABLED="${ACTIVITY_LOG_ENABLED:-true}",ACTIVITY_LOG_DIR="${ACTIVITY_LOG_DIR}",ADMIN_API_PORT="${ADMIN_API_PORT:-8888}"
 EOF
 
 # =============================================================================
@@ -494,7 +509,23 @@ fi
 # =============================================================================
 log_success "Starting $UPSTREAM Gateway (external: $EXTERNAL_GATEWAY_PORT, internal: $INTERNAL_GATEWAY_PORT)"
 log_info "Web interface available at: http://localhost:$EXTERNAL_GATEWAY_PORT"
+log_info "Admin dashboard available at: http://localhost:${ADMIN_API_PORT:-8888}/admin"
 log_info "Gateway token: ${OPENCLAW_GATEWAY_TOKEN:0:8}..."
+
+# Log container startup activity
+if command -v python3 &> /dev/null; then
+    python3 -c "
+import sys
+sys.path.insert(0, '/app/lib')
+from activity import log_info
+log_info('system', 'Container started', {
+    'upstream': '$UPSTREAM',
+    'external_port': '$EXTERNAL_GATEWAY_PORT',
+    'internal_port': '$INTERNAL_GATEWAY_PORT',
+    'version': open('/app/VERSION').read() if __import__('os').path.exists('/app/VERSION') else 'unknown'
+}, 'system')
+" 2>/dev/null || true
+fi
 log_info "Starting supervisord to manage services..."
 log_info ""
 log_info "=== Troubleshooting Info ==="
