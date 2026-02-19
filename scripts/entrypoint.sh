@@ -276,8 +276,9 @@ node /app/scripts/configure.js
 # =============================================================================
 log_info "Configuring Nginx..."
 
-# Generate nginx configuration with upstream-specific naming
-tee "/etc/nginx/sites-available/$UPSTREAM" > /dev/null << EOF
+# Generate nginx configuration
+# Use conf.d directory which is included by default in nginx Docker images
+tee "/etc/nginx/conf.d/${UPSTREAM}.conf" > /dev/null << EOF
 # $UPSTREAM Nginx Configuration
 
 # Upstream for $UPSTREAM Gateway
