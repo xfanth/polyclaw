@@ -221,8 +221,9 @@ RUN mkdir -p /data/.${UPSTREAM}/identity /data/workspace /app/config /var/log/${
 
 # Remove default nginx site and make nginx directories writable
 RUN rm -f /etc/nginx/sites-enabled/default \
-    && chown -R ${UPSTREAM}:${UPSTREAM} /etc/nginx/sites-available /etc/nginx/sites-enabled \
-    && chmod 755 /etc/nginx/sites-available /etc/nginx/sites-enabled \
+    && mkdir -p /etc/nginx/conf.d \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d \
+    && chmod 755 /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d \
     && touch /etc/nginx/.htpasswd \
     && chown ${UPSTREAM}:${UPSTREAM} /etc/nginx/.htpasswd \
     && chmod 644 /etc/nginx/.htpasswd \
