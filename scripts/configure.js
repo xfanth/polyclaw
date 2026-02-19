@@ -149,8 +149,9 @@ function getConfigInfo(upstream) {
         configFile = null;
         configFormat = 'none';
     } else if (upstream === 'zeroclaw') {
-        fs.mkdirSync(STATE_DIR, { recursive: true });
-        configFile = path.join(STATE_DIR, 'config.toml');
+        const zeroclawDir = '/data/.zeroclaw';
+        fs.mkdirSync(zeroclawDir, { recursive: true });
+        configFile = path.join(zeroclawDir, 'config.toml');
         configFormat = 'toml';
     } else {
         const nestedDir = path.join(STATE_DIR, `.${upstream}`);

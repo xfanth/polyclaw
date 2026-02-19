@@ -109,44 +109,47 @@ jobs:
 
           # Determine which upstreams to build
           if [ "$BUILD_ALL" = "true" ]; then
-            echo "upstreams=[\"openclaw\",\"picoclaw\",\"ironclaw\",\"zeroclaw\"]" >> $GITHUB_OUTPUT
+            # TODO: Re-enable openclaw, picoclaw, ironclaw when ready
+            echo "upstreams=[\"zeroclaw\"]" >> $GITHUB_OUTPUT
             echo "any_changes=true" >> $GITHUB_OUTPUT
-            echo "Building all upstreams due to common path changes"
+            echo "Building zeroclaw only (others temporarily disabled)"
             exit 0
           fi
 
           # Check upstream-specific files (Dockerfile-{upstream} or version tracking files)
-          BUILD_OPENCLAW="false"
-          BUILD_PICOCLAW="false"
-          BUILD_IRONCLAW="false"
+          # TODO: Re-enable openclaw, picoclaw, ironclaw when ready
+          # BUILD_OPENCLAW="false"
+          # BUILD_PICOCLAW="false"
+          # BUILD_IRONCLAW="false"
           BUILD_ZEROCLAW="false"
 
           for file in $CHANGED_FILES; do
             case "$file" in
-              Dockerfile-openclaw|scripts/configure-openclaw.js|.openclaw-*|openclaw-*) BUILD_OPENCLAW="true" ;;
-              Dockerfile-picoclaw|scripts/configure-picoclaw.js|.picoclaw-*|picoclaw-*) BUILD_PICOCLAW="true" ;;
-              Dockerfile-ironclaw|scripts/configure-ironclaw.js|.ironclaw-*|ironclaw-*) BUILD_IRONCLAW="true" ;;
+              # Dockerfile-openclaw|scripts/configure-openclaw.js|.openclaw-*|openclaw-*) BUILD_OPENCLAW="true" ;;
+              # Dockerfile-picoclaw|scripts/configure-picoclaw.js|.picoclaw-*|picoclaw-*) BUILD_PICOCLAW="true" ;;
+              # Dockerfile-ironclaw|scripts/configure-ironclaw.js|.ironclaw-*|ironclaw-*) BUILD_IRONCLAW="true" ;;
               Dockerfile-zeroclaw|scripts/configure-zeroclaw.js|.zeroclaw-*|zeroclaw-*) BUILD_ZEROCLAW="true" ;;
             esac
           done
 
           # Build JSON array of upstreams
+          # TODO: Re-enable openclaw, picoclaw, ironclaw when ready
           FIRST="true"
           UPSTREAMS_JSON="["
-          if [ "$BUILD_OPENCLAW" = "true" ]; then
-            UPSTREAMS_JSON="${UPSTREAMS_JSON}\"openclaw\""
-            FIRST="false"
-          fi
-          if [ "$BUILD_PICOCLAW" = "true" ]; then
-            [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
-            UPSTREAMS_JSON="${UPSTREAMS_JSON}\"picoclaw\""
-            FIRST="false"
-          fi
-          if [ "$BUILD_IRONCLAW" = "true" ]; then
-            [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
-            UPSTREAMS_JSON="${UPSTREAMS_JSON}\"ironclaw\""
-            FIRST="false"
-          fi
+          # if [ "$BUILD_OPENCLAW" = "true" ]; then
+          #   UPSTREAMS_JSON="${UPSTREAMS_JSON}\"openclaw\""
+          #   FIRST="false"
+          # fi
+          # if [ "$BUILD_PICOCLAW" = "true" ]; then
+          #   [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
+          #   UPSTREAMS_JSON="${UPSTREAMS_JSON}\"picoclaw\""
+          #   FIRST="false"
+          # fi
+          # if [ "$BUILD_IRONCLAW" = "true" ]; then
+          #   [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
+          #   UPSTREAMS_JSON="${UPSTREAMS_JSON}\"ironclaw\""
+          #   FIRST="false"
+          # fi
           if [ "$BUILD_ZEROCLAW" = "true" ]; then
             [ "$FIRST" = "false" ] && UPSTREAMS_JSON="${UPSTREAMS_JSON},"
             UPSTREAMS_JSON="${UPSTREAMS_JSON}\"zeroclaw\""
@@ -292,15 +295,16 @@ jobs:
       matrix:
         upstream: ${{ fromJson(needs.detect-changes.outputs.upstreams) }}
         include:
-          - upstream: openclaw
-            github_owner: openclaw
-            github_repo: openclaw
-          - upstream: picoclaw
-            github_owner: sipeed
-            github_repo: picoclaw
-          - upstream: ironclaw
-            github_owner: nearai
-            github_repo: ironclaw
+          # TODO: Re-enable when ready
+          # - upstream: openclaw
+          #   github_owner: openclaw
+          #   github_repo: openclaw
+          # - upstream: picoclaw
+          #   github_owner: sipeed
+          #   github_repo: picoclaw
+          # - upstream: ironclaw
+          #   github_owner: nearai
+          #   github_repo: ironclaw
           - upstream: zeroclaw
             github_owner: zeroclaw-labs
             github_repo: zeroclaw
