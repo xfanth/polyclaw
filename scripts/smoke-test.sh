@@ -379,9 +379,39 @@ else
 fi
 
 # =============================================================================
-# Test 9: Run Healthcheck Commands
+# Test 9: HTTP Auth Validation
 # =============================================================================
-log_info "Test 9: Running healthcheck commands..."
+log_info "Test 9: Testing HTTP auth on main endpoint..."
+
+log_info "Testing / without auth (expect 401)..."
+HTTP_CODE_NO_AUTH=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18080/ 2>/dev/null || echo "000")
+if [ "$HTTP_CODE_NO_AUTH" = "401" ]; then
+    log_success "Main endpoint requires auth (HTTP 401)"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    log_error "Expected HTTP 401 without auth, got: $HTTP_CODE_NO_AUTH"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+log_info "Testing / with auth (expect not 404)..."
+HTTP_CODE_WITH_AUTH=$(curl -s -o /dev/null -w "%{http_code}" -u admin:testpass http://localhost:18080/ 2>/dev/null || echo "000")
+if [ "$HTTP_CODE_WITH_AUTH" = "404" ]; then
+    log_error "Main endpoint returned 404 with auth - gateway not properly connected"
+    log_info "This indicates nginx is up but the backend gateway is not responding correctly"
+    curl -s -u admin:testpass http://localhost:18080/ 2>/dev/null | head -20 || true
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+elif [ "$HTTP_CODE_WITH_AUTH" = "502" ]; then
+    log_error "Main endpoint returned 502 with auth - backend gateway not running"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    log_success "Main endpoint responds with auth (HTTP $HTTP_CODE_WITH_AUTH)"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+
+# =============================================================================
+# Test 10: Run Healthcheck Commands
+# =============================================================================
+log_info "Test 10: Running healthcheck commands..."
 
 HEALTHCHECK_ERRORS=0
 
@@ -447,9 +477,9 @@ if [ $HEALTHCHECK_ERRORS -gt 0 ]; then
 fi
 
 # =============================================================================
-# Test 10: Stability Check (container stays running)
+# Test 11: Stability Check (container stays running)
 # =============================================================================
-log_info "Test 10: Stability check - ensuring container stays running for ${STABILITY_CHECK_TIME}s..."
+log_info "Test 11: Stability check - ensuring container stays running for ${STABILITY_CHECK_TIME}s..."
 
 INITIAL_RESTARTS=$(docker inspect --format='{{.RestartCount}}' "${UPSTREAM}-smoke-test" 2>/dev/null || echo "0")
 STABILITY_PASSED=1
