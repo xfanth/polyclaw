@@ -174,3 +174,58 @@ When changing the security-scan matrix (e.g., adding a new upstream):
 ## Docker Entrypoint Environment Variables
 
 When adding new environment variables to `scripts/configure.js`, you **must** also add them to the `--whitelist-environment` list in `scripts/entrypoint.sh` (around line 81). The entrypoint runs as root, then switches to the upstream user via `su` - only whitelisted env vars survive this switch. See MEMORY.md for the current whitelist.
+
+## Admin Activity Dashboard
+
+The project includes an admin activity dashboard for monitoring user activities.
+
+### Files
+
+- `lib/activity.py` - Python activity logging module
+- `lib/activity.js` - Node.js activity logging module  
+- `admin/index.html` - Web dashboard UI
+- `admin/api_server.py` - Admin API server
+- `admin/README.md` - Documentation
+
+### Environment Variables
+
+When modifying activity-related functionality, ensure these env vars are whitelisted in `entrypoint.sh`:
+- `ACTIVITY_LOG_ENABLED` - Enable/disable activity logging
+- `ACTIVITY_LOG_DIR` - Activity log directory path
+- `ADMIN_API_PORT` - Admin dashboard port
+
+### Activity Logging Usage
+
+**Python** (`lib/activity.py`):
+```python
+from activity import log_login, log_config_change, log_save, log_error
+
+log_login('user@example.com', source='web', details={'ip': '192.168.1.1'})
+log_config_change('admin', changes={'model': 'gpt-4'})
+log_save('user', 'project_config.json')
+log_error('system', 'Database connection failed', details={'retry': 1})
+```
+
+**Node.js** (`lib/activity.js`):
+```javascript
+const { logLogin, logConfigChange, logSave, logError } = require('./lib/activity.js');
+
+logLogin('user@example.com', 'web', { ip: '192.168.1.1' });
+logConfigChange('admin', { model: 'gpt-4' });
+logSave('user', 'project_config.json');
+logError('system', 'Database connection failed', { retry: 1 });
+```
+
+### Modifying the Dashboard
+
+- Dashboard UI is in `admin/index.html` (pure HTML/CSS/JS)
+- API endpoints are in `admin/api_server.py`
+- The dashboard is served at `http://localhost:{ADMIN_API_PORT}/admin`
+- No build step required - changes to HTML are immediate
+
+### Activity Log Format
+
+Activities stored in JSON Lines format at `{ACTIVITY_LOG_DIR}/activities_YYYY-MM-DD.jsonl`:
+```json
+{"timestamp": "2026-02-19T10:30:00.000Z", "user": "admin", "activity": "login", "description": "User logged in", "source": "web", "details": {"ip": "192.168.1.100"}}
+```

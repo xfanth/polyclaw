@@ -285,3 +285,71 @@ allow_public_bind = false
 Reference: https://github.com/zeroclaw-labs/zeroclaw/blob/main/dev/config.template.toml
 
 **Do NOT** use nested `[agents.defaults]` sections - ZeroClaw expects flat top-level fields.
+
+## Admin Activity Dashboard
+
+The container includes an admin activity dashboard for monitoring user activities.
+
+### Activity Logging System
+
+- **Python Module**: `lib/activity.py` - Use for Python scripts and tools
+- **Node.js Module**: `lib/activity.js` - Use for Node.js scripts and upstream integration
+- **Log Location**: `/data/.{UPSTREAM}/activity/activities_YYYY-MM-DD.jsonl`
+- **Format**: JSON Lines (one JSON object per line)
+
+### Tracked Activities
+
+| Activity Type | Description |
+|---------------|-------------|
+| `login` | User logged in |
+| `logout` | User logged out |
+| `config_change` | Configuration file modified |
+| `input_change` | Input field value changed |
+| `save` | Data saved |
+| `load` | Data loaded |
+| `error` | Error occurred |
+| `warning` | Warning issued |
+| `info` | Informational event |
+
+### Configuration
+
+Environment variables (add to `.env`):
+```env
+ACTIVITY_LOG_ENABLED=true          # Enable/disable activity logging
+ACTIVITY_LOG_DIR=/data/.zeroclaw/activity  # Activity log directory
+ADMIN_API_PORT=8888                # Admin dashboard port
+```
+
+### Admin Dashboard Access
+
+- **URL**: `http://localhost:8888/admin` (or your configured port)
+- **Features**: View activities, filter by user/type/date, see statistics
+
+### API Endpoints
+
+- `GET /api/admin/activities` - List activities with filters
+- `GET /api/admin/stats` - Get activity statistics
+
+### Adding Activity Logging
+
+**Python**:
+```python
+from activity import log_login, log_config_change
+log_login('user@example.com', source='web', details={'ip': '192.168.1.1'})
+log_config_change('admin', changes={'model': 'gpt-4'}, source='web')
+```
+
+**Node.js**:
+```javascript
+const { logLogin, logConfigChange } = require('./lib/activity.js');
+logLogin('user@example.com', 'web', { ip: '192.168.1.1' });
+logConfigChange('admin', { model: 'gpt-4' }, 'web');
+```
+
+### Implementation Notes
+
+- The admin API runs as a separate supervisord service (`admin-api`)
+- Entrypoint whitelists `ACTIVITY_LOG_ENABLED`, `ACTIVITY_LOG_DIR`, `ADMIN_API_PORT` env vars
+- Activity logs are rotated daily (one file per day)
+- The dashboard is read-only and doesn't allow modifying activities
+- Activities include: timestamp, user, activity type, description, source, and details
