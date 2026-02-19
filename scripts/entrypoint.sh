@@ -126,6 +126,118 @@ if [ "$(id -u)" = "0" ]; then
     chmod 700 "$STATE_DIR/identity" 2>/dev/null || true
     sync  # Ensure all chown operations complete before proceeding
 
+    # Set port variables for nginx config
+    EXTERNAL_GATEWAY_PORT="${OPENCLAW_EXTERNAL_GATEWAY_PORT:-8080}"
+    INTERNAL_GATEWAY_PORT="${OPENCLAW_INTERNAL_GATEWAY_PORT:-18789}"
+
+    # Configure nginx while still root (requires write access to /etc/nginx)
+    log_info "Configuring Nginx..."
+    tee "/etc/nginx/conf.d/${UPSTREAM}.conf" > /dev/null << NGINX_EOF
+# $UPSTREAM Nginx Configuration
+
+upstream ${UPSTREAM}_gateway {
+    server 127.0.0.1:$INTERNAL_GATEWAY_PORT;
+    keepalive 32;
+}
+
+limit_req_zone \$binary_remote_addr zone=${UPSTREAM}_limit:10m rate=10r/s;
+
+server {
+    listen $EXTERNAL_GATEWAY_PORT default_server;
+    server_name _;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 50M;
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+
+    location /healthz {
+        proxy_pass http://${UPSTREAM}_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        access_log off;
+    }
+
+    location /hooks {
+        proxy_pass http://${UPSTREAM}_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location / {
+        limit_req zone=${UPSTREAM}_limit burst=20 nodelay;
+        auth_basic "$UPSTREAM Gateway";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://${UPSTREAM}_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_cache off;
+    }
+
+    location /browser/ {
+        proxy_pass http://browser:6080/vnc.html;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        proxy_buffering off;
+        proxy_cache off;
+    }
+
+    location /websockify {
+        proxy_pass http://browser:6080/websockify;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        proxy_buffering off;
+    }
+}
+NGINX_EOF
+
+    # Create htpasswd file
+    if [ -n "${AUTH_PASSWORD:-}" ]; then
+        AUTH_USERNAME="${AUTH_USERNAME:-admin}"
+        echo "$AUTH_USERNAME:$(openssl passwd -apr1 "$AUTH_PASSWORD")" > /etc/nginx/.htpasswd
+        log_info "HTTP Basic Auth configured for user: $AUTH_USERNAME"
+    else
+        echo "" > /etc/nginx/.htpasswd
+        log_warn "No AUTH_PASSWORD set - gateway will be open"
+    fi
+
+    # Test nginx config
+    nginx -t || log_warn "Nginx configuration test had issues"
+
     log_info "Switching to $UPSTREAM user..."
     exec su -s /bin/bash --whitelist-environment=HOME,UPSTREAM,OPENCLAW_STATE_DIR,OPENCLAW_WORKSPACE_DIR,OPENCLAW_EXTERNAL_GATEWAY_PORT,OPENCLAW_INTERNAL_GATEWAY_PORT,OPENCLAW_GATEWAY_TOKEN,AUTH_USERNAME,AUTH_PASSWORD,OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS,OPENCLAW_CONTROL_UI_ALLOW_INSECURE_AUTH,OPENCLAW_GATEWAY_BIND,OPENCLAW_PRIMARY_MODEL,BROWSER_CDP_URL,BROWSER_DEFAULT_PROFILE,WHATSAPP_ENABLED,WHATSAPP_DM_POLICY,WHATSAPP_ALLOW_FROM,TELEGRAM_BOT_TOKEN,TELEGRAM_DM_POLICY,DISCORD_BOT_TOKEN,DISCORD_DM_POLICY,SLACK_BOT_TOKEN,SLACK_DM_POLICY,HOOKS_ENABLED,HOOKS_TOKEN,HOOKS_PATH,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENROUTER_API_KEY,GEMINI_API_KEY,XAI_API_KEY,GROQ_API_KEY,MISTRAL_API_KEY,CEREBRAS_API_KEY,MOONSHOT_API_KEY,KIMI_API_KEY,ZAI_API_KEY,OPENCODE_API_KEY,COPILOT_GITHUB_TOKEN,XIAOMI_API_KEY,ZEROCLAW_API_KEY,ZEROCLAW_PROVIDER,ZEROCLAW_MODEL,ZEROCLAW_WORKSPACE,ZEROCLAW_TEMPERATURE,ZEROCLAW_GATEWAY_HOST,ZEROCLAW_WHATSAPP_APP_SECRET "$UPSTREAM" -c 'cd /data && /app/scripts/entrypoint.sh'
 fi
@@ -270,156 +382,6 @@ fi
 # =============================================================================
 log_info "Generating $UPSTREAM configuration..."
 node /app/scripts/configure.js
-
-# =============================================================================
-# Configure Nginx
-# =============================================================================
-log_info "Configuring Nginx..."
-
-# Generate nginx configuration
-# Use conf.d directory which is included by default in nginx Docker images
-tee "/etc/nginx/conf.d/${UPSTREAM}.conf" > /dev/null << EOF
-# $UPSTREAM Nginx Configuration
-
-# Upstream for $UPSTREAM Gateway
-upstream ${UPSTREAM}_gateway {
-    server 127.0.0.1:$INTERNAL_GATEWAY_PORT;
-    keepalive 32;
-}
-
-# Rate limiting zone
-limit_req_zone \$binary_remote_addr zone=${UPSTREAM}_limit:10m rate=10r/s;
-
-server {
-    listen $EXTERNAL_GATEWAY_PORT default_server;
-    server_name _;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-
-    # Client body size
-    client_max_body_size 50M;
-
-    # Timeouts
-    proxy_connect_timeout 60s;
-    proxy_send_timeout 60s;
-    proxy_read_timeout 60s;
-
-    # Health check endpoint (no auth)
-    location /healthz {
-        proxy_pass http://${UPSTREAM}_gateway;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        access_log off;
-    }
-
-    # Hooks endpoint (special handling)
-    location /hooks {
-        proxy_pass http://${UPSTREAM}_gateway;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        # WebSocket support for hooks
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
-    # Main application
-    location / {
-        # Rate limiting
-        limit_req zone=${UPSTREAM}_limit burst=20 nodelay;
-
-        # Basic auth if configured
-        auth_basic "$UPSTREAM Gateway";
-        auth_basic_user_file /etc/nginx/.htpasswd;
-
-        proxy_pass http://${UPSTREAM}_gateway;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        # WebSocket support
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Buffer settings
-        proxy_buffering off;
-        proxy_cache off;
-    }
-
-    # Browser noVNC access (requires browser sidecar with noVNC on port 6080)
-    # The browser host should provide noVNC on port 6080
-    location /browser/ {
-        proxy_pass http://browser:6080/vnc.html;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        # WebSocket support for noVNC
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Timeouts for long-lived VNC sessions
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-
-        # Buffer settings
-        proxy_buffering off;
-        proxy_cache off;
-    }
-
-    # noVNC websockify endpoint
-    location /websockify {
-        proxy_pass http://browser:6080/websockify;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-
-        # WebSocket support
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Timeouts for long-lived connections
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-
-        # Disable buffering for real-time communication
-        proxy_buffering off;
-    }
-}
-EOF
-
-# Create htpasswd file for basic auth if credentials are provided
-if [ -n "${AUTH_PASSWORD:-}" ]; then
-    AUTH_USERNAME="${AUTH_USERNAME:-admin}"
-    echo "$AUTH_USERNAME:$(openssl passwd -apr1 "$AUTH_PASSWORD")" | tee /etc/nginx/.htpasswd > /dev/null
-    log_success "HTTP Basic Auth configured for user: $AUTH_USERNAME"
-else
-    # Create empty htpasswd to allow all access
-    echo "" | tee /etc/nginx/.htpasswd > /dev/null
-    log_warn "No AUTH_PASSWORD set - gateway will be open (not recommended for production)"
-fi
-
-# Test nginx configuration
-nginx -t || {
-    log_error "Nginx configuration test failed"
-    exit 1
-}
 
 # =============================================================================
 # Fix legacy config keys
