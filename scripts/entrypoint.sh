@@ -121,6 +121,7 @@ if [ "$(id -u)" = "0" ]; then
     chown -R "$UPSTREAM:$UPSTREAM" "/var/log/$UPSTREAM" 2>/dev/null || true
     chown -R "$UPSTREAM:$UPSTREAM" /var/log/supervisor 2>/dev/null || true
     chown -R "$UPSTREAM:$UPSTREAM" /var/lib/nginx 2>/dev/null || true
+    mkdir -p /etc/nginx/conf.d 2>/dev/null || true
     chown -R "$UPSTREAM:$UPSTREAM" /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
     touch /etc/nginx/.htpasswd 2>/dev/null || true
     chown "$UPSTREAM:$UPSTREAM" /etc/nginx/.htpasswd 2>/dev/null || true
