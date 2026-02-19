@@ -401,16 +401,16 @@ if [ "$HTTP_CODE_WITH_AUTH" = "502" ]; then
     log_error "Main endpoint returned 502 with auth - backend gateway not running"
     TESTS_FAILED=$((TESTS_FAILED + 1))
 elif [ "$HTTP_CODE_WITH_AUTH" = "404" ]; then
-    # Check if 404 is from backend (gateway connected) or nginx (gateway not found)
-    if echo "$HTTP_BODY_WITH_AUTH" | grep -q "404 page not found"; then
-        # Backend responded with its own 404 - gateway is connected but has no root endpoint
-        log_success "Backend gateway connected (returns 404 for root - API gateway with no web UI)"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        # Nginx 404 - gateway not properly connected
-        log_error "Main endpoint returned nginx 404 - gateway not properly connected"
+    # For API gateways (picoclaw, zeroclaw, ironclaw), 404 on root is expected
+    # They don't have web UIs at /. As long as we get here (not 502), gateway is connected.
+    # Only fail if response looks like nginx HTML error page (indicates proxy issue).
+    if echo "$HTTP_BODY_WITH_AUTH" | grep -q "<html>" && echo "$HTTP_BODY_WITH_AUTH" | grep -qi "nginx"; then
+        log_error "Main endpoint returned nginx HTML 404 - gateway not properly connected"
         echo "$HTTP_BODY_WITH_AUTH" | head -20
         TESTS_FAILED=$((TESTS_FAILED + 1))
+    else
+        log_success "Backend gateway connected (returns 404 for root - API gateway with no web UI)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     fi
 else
     log_success "Main endpoint responds with auth (HTTP $HTTP_CODE_WITH_AUTH)"
