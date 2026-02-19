@@ -409,11 +409,10 @@ jobs:
           echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
           echo "upstream_version=$UPSTREAM_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Setup WarpBuild Docker Builder
-        uses: WarpBuilds/warpbuild@v1
+      - name: Configure WarpBuild Docker Builder
+        uses: WarpBuilds/docker-configure@v1
+        with:
+          profile-name: "polyclaw-builder"
 
       - name: Extract Docker metadata
         id: meta
@@ -431,7 +430,7 @@ jobs:
             upstream=${{ matrix.upstream }}
 
       - name: Build Docker image
-        uses: WarpBuilds/build-push-action@v6
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile-${{ matrix.upstream }}
