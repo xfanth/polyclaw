@@ -430,6 +430,14 @@ else
     "/usr/local/bin/$CLI_NAME" doctor || true
 fi
 
+# Determine the correct HOME directory for supervisord
+# ZeroClaw expects config at ~/.zeroclaw/ so HOME must be /data (not /data/.zeroclaw)
+if [ "$UPSTREAM" = "zeroclaw" ]; then
+    SUPERVISOR_HOME="/data"
+else
+    SUPERVISOR_HOME="$STATE_DIR"
+fi
+
 # =============================================================================
 # Create supervisord configuration
 # =============================================================================
@@ -493,7 +501,7 @@ autorestart=true
 priority=20
 stdout_logfile=/var/log/supervisor/$UPSTREAM.log
 stderr_logfile=/var/log/supervisor/$UPSTREAM-error.log
-environment=HOME="${STATE_DIR}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",OPENCLAW_INTERNAL_GATEWAY_PORT="${INTERNAL_GATEWAY_PORT}",NODE_ENV="production"
+environment=HOME="${SUPERVISOR_HOME}",OPENCLAW_STATE_DIR="${STATE_DIR}",OPENCLAW_WORKSPACE_DIR="${WORKSPACE_DIR}",OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN}",OPENCLAW_INTERNAL_GATEWAY_PORT="${INTERNAL_GATEWAY_PORT}",NODE_ENV="production"
 EOF
 
 # =============================================================================
@@ -502,7 +510,7 @@ EOF
 log_info "Gateway command: $GATEWAY_CMD"
 log_info "Supervisord config written to: $STATE_DIR/supervisord.conf"
 log_info "Environment variables passed to $UPSTREAM:"
-log_info "  HOME=${STATE_DIR}"
+log_info "  HOME=${SUPERVISOR_HOME}"
 log_info "  OPENCLAW_STATE_DIR=${STATE_DIR}"
 log_info "  OPENCLAW_WORKSPACE_DIR=${WORKSPACE_DIR}"
 log_info "  OPENCLAW_INTERNAL_GATEWAY_PORT=${INTERNAL_GATEWAY_PORT}"
