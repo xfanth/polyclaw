@@ -332,7 +332,7 @@ RUN printf '%s\n' '#!/usr/bin/env bash' \
     && chmod +x /usr/local/bin/upstream
 
 # Set up directories with proper permissions
-RUN mkdir -p /data/.${UPSTREAM}/identity /data/workspace /app/config /var/log/${UPSTREAM} \
+RUN mkdir -p /data/.${UPSTREAM}/identity /data/.${UPSTREAM}/workspace /data/workspace /app/config /var/log/${UPSTREAM} \
     && chown -R ${UPSTREAM}:${UPSTREAM} /data/.${UPSTREAM} \
     && chown -R ${UPSTREAM}:${UPSTREAM} /data/workspace \
     && chown -R ${UPSTREAM}:${UPSTREAM} /var/log/${UPSTREAM} \
@@ -340,8 +340,8 @@ RUN mkdir -p /data/.${UPSTREAM}/identity /data/workspace /app/config /var/log/${
 
 # Remove default nginx site and make nginx directories writable
 RUN rm -f /etc/nginx/sites-enabled/default \
-    && chown -R ${UPSTREAM}:${UPSTREAM} /etc/nginx/sites-available /etc/nginx/sites-enabled \
-    && chmod 755 /etc/nginx/sites-available /etc/nginx/sites-enabled \
+    && chown -R ${UPSTREAM}:${UPSTREAM} /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d \
+    && chmod 755 /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d \
     && touch /etc/nginx/.htpasswd \
     && chown ${UPSTREAM}:${UPSTREAM} /etc/nginx/.htpasswd \
     && chmod 644 /etc/nginx/.htpasswd \
@@ -359,8 +359,7 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 # Copy scripts and configuration
 COPY --chown=${UPSTREAM}:${UPSTREAM} scripts/ /app/scripts/
 COPY --chown=${UPSTREAM}:${UPSTREAM} nginx.conf /etc/nginx/sites-available/${UPSTREAM}
-RUN chmod +x /app/scripts/*.sh \
-    && ln -s /etc/nginx/sites-available/${UPSTREAM} /etc/nginx/sites-enabled/${UPSTREAM}
+RUN chmod +x /app/scripts/*.sh
 
 # Create health check script
 RUN printf '%s\n' '#!/bin/bash' "curl -f http://localhost:\${PORT:-8080}/healthz || exit 1" > /app/scripts/healthcheck.sh \
