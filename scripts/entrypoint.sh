@@ -257,6 +257,7 @@ chmod 700 "$STATE_DIR/credentials" 2>/dev/null || true
 export UPSTREAM="$UPSTREAM"
 export OPENCLAW_STATE_DIR="$STATE_DIR"
 export OPENCLAW_WORKSPACE_DIR="$WORKSPACE_DIR"
+export OPENCLAW_INTERNAL_GATEWAY_PORT="$INTERNAL_GATEWAY_PORT"
 # ZeroClaw expects config at ~/.zeroclaw/ so HOME must be /data (not /data/.zeroclaw)
 if [ "$UPSTREAM" = "zeroclaw" ]; then
     export HOME="/data"
